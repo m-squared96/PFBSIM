@@ -24,7 +24,7 @@ def pfb_init(signal,M,P,window):
 
     W, fir = fir_filter(signal_array,M,P,window_coeffs)
 
-    signal_polyphased = np.fft.rfft(fir,P,axis=1)
+    signal_polyphased = np.fft.fft(fir,P,axis=1)
 
     return signal_polyphased
 
@@ -44,7 +44,8 @@ def fir_filter(signal,M,P,window_coeffs):
         W = int(signal.shape[0]/M/P - (signal.shape[0]%(M*P))/(M*P))
         print("Concatenating signal length to", str(W*M*P), "values")
 
-    else: W = int(signal.shape[0]/M/P)
+    else:
+        W = int(signal.shape[0]/M/P)
 
     signal_p = signal.reshape((W*M,P)).T
     h_p = window_coeffs.reshape((M,P)).T

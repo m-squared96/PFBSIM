@@ -20,9 +20,15 @@ def main():
         filename = str(input("Enter data filename:  "))
         signal = pd.read_csv("Data/" + filename + ".csv")
 
+        N_data = len(signal['Signal'])
+        T_data = signal['Time'][1] - signal['Time'][0]
+
         signal_pfb = pfb.pfb_init(signal,M,P,'hamming')
 
-        plotter(signal_pfb)
+        xf_data = np.linspace(0.0, 1.0/(4.0*T_data), int(N_data/4))
+
+        plt.plot(xf_data,signal_pfb)
+        plt.show()
 
     else:
 

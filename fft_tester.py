@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+#TODO: Figure out frequency array indexing
+
 def main():
 
     filename = str(input("Enter the filename    "))
@@ -13,17 +15,17 @@ def main():
     time_array = np.array(signal['Time'])
     signal_array = np.array(signal['Signal'])
 
-    signal_fft = np.fft.rfft(signal_array)
+    signal_fft = np.fft.fft(signal_array)
 
     n = signal_array.size
     time_int = timestep(time_array)
 
-    freqs = np.fft.rfftfreq(n,d=time_int)
+    xf_data = np.linspace(0.0,1.0/(4*time_int),int(n/4))
 
-    print(max(freqs))
-
-    #plt.plot(freqs,signal_fft)
-    #plt.show()
+    plt.figure()
+    plt.plot(xf_data,2.0/n * np.abs(signal_fft[:n//4]))
+    plt.xlim(20,100)
+    plt.show()
 
 def timestep(time):
     
