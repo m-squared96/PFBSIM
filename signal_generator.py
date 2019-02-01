@@ -41,7 +41,15 @@ def signal_output(time_array,complexity,noise_strength):
         print("Frequency values:")
         print(freqs.T)
 
-        return signal
+        filename = ""
+
+        for f in freqs:
+            
+            filename += str(f) + "_"
+
+        filename = filename[:-1]
+
+        return signal,filename
 
 def normalise(vector):
     '''
@@ -77,22 +85,21 @@ def directory_check():
 
 def main():
    
-    Npoint = 4096
-    multiple = 1000
+    Npoint = 4096 
+    multiple = 5
 
-    time = np.arange(0,Npoint*multiple,1.0)
-    signal = signal_output(time,2,0.5)
+    time = np.linspace(0,10,Npoint*multiple)
+    signal,filename = signal_output(time,5,0.5)
+
+    print(filename)
 
     output_frame = pd.DataFrame({"Time":time, "Signal":signal})
 
     print("Signal data will be output to 'Data/' directory")
-
-    filename = str(input("Enter output filename (excl. file extension and directory):   "))
 
     directory_check()
 
     output_frame.to_csv("Data/" + filename + ".csv",index=False)
 
 main()
-#normalise_test()
 
