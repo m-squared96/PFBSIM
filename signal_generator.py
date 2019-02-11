@@ -86,12 +86,14 @@ def directory_check():
 def main():
    
     Npoint = 4096 
-    multiple = 5
+    multiple = 500.789
 
     time = np.linspace(0,10,Npoint*multiple)
     signal,filename = signal_output(time,5,0.5)
 
     print(filename)
+
+    filename = 'LgUe'
 
     output_frame = pd.DataFrame({"Time":time, "Signal":signal})
 

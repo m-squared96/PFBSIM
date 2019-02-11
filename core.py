@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import os
+import glob
 
 import numpy as np
 import pandas as pd
@@ -8,39 +9,69 @@ import matplotlib.pyplot as plt
 
 import toolkit as pfb
 
-#TODO: Figure out pfb output and how to isolate individual freqs
+#TODO: Filename auto-completion
+#TODO: Match frequency array with observed spikes
 
 def main():
 
-    M = 4
-    P = 1024
+    N = 4096 # Point spec for the FFT
 
-    if os.path.isdir("Data"):
+    signal, file_length = readfile(N)
 
-        filename = str(input("Enter data filename:  "))
-        signal = pd.read_csv("Data/" + filename + ".csv")
+    PFB = pfb.FilterBank(signal,N,file_length,'hamming')
+    PFB.split()
+    PFB.fft()
+    PFB.frequencies()
+    
+    plotter(PFB)
 
-        N_data = len(signal['Signal'])
-        T_data = signal['Time'][1] - signal['Time'][0]
+def readfile(N):
 
-        signal_pfb = pfb.pfb_init(signal,M,P,'hamming')
+    if os.path.isdir("Data"): # Checks if Data/ subdirectory exists
 
-        xf_data = np.linspace(0.0, 1.0/(4.0*T_data), int(N_data/4))
+        file_list = glob.glob('Data/*.csv') # Returns a list of CSV files in Data/
+        
+        if len(file_list) > 0:
+            
+            print("Files in 'Data/' repository:")
+            print("\n")
 
-        plt.plot(xf_data,signal_pfb)
-        plt.show()
+            for f in file_list:
+                print(f[5:-4])
+            
+            print("\n")
+
+            filename = str(input("Enter data filename:  "))
+            signal = pd.read_csv("Data/" + filename + ".csv")
+            
+            file_length = len(signal['Signal'])
+
+            # If file length is not a multiple of N, truncate the file (from the
+            # end) to make it a multiple of N samples long.
+
+            if file_length % N != 0:
+                
+                print('File length not a multiple of N (' + str(N) + ').')
+                s_length = int(file_length/N)
+                file_length = int(s_length*N)
+
+                signal = signal[:file_length]
+                print('File concatenated to length', str(file_length))
+
+            return signal, file_length
+
+        else:
+
+            raise FileError("No files in 'Data/' repository")
 
     else:
 
-        print("No 'Data/' directory exists.")
+        raise FileError("No 'Data/' directory exists.")
 
-def plotter(processed):
+def plotter(PFB):
     
     plt.figure()
-    plt.title('Signal Power over Time')
-    plt.plot(processed[0],np.abs(processed[1])**2)
-    plt.xlabel('Channel')
-    plt.ylabel('Power (dB)')
+    plt.plot(PFB.freqs,np.abs(PFB.signal_f[:PFB.N//2]))
 
 main()
 plt.show()
