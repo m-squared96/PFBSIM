@@ -2,6 +2,7 @@
 
 import os
 import glob
+import readline
 
 import numpy as np
 import pandas as pd
@@ -9,8 +10,33 @@ import matplotlib.pyplot as plt
 
 import toolkit as pfb
 
-#TODO: Filename auto-completion
 #TODO: Match frequency array with observed spikes
+
+class FilenameCompleter:
+
+    def __init__(self,filenames):
+
+        self.options = sorted(filenames)
+
+    def complete(self,text,state):
+
+        if state == 0: # Generate possible matches on first trigger
+            if text: # Cache entries that start with entered text
+                matches = []
+                for f in self.options:
+                    if f.startswith(text):
+                        matches.append(f)
+
+                self.matches = matches
+
+            else: # No text entered --> all matches possible
+                self.matches = self.options[:]
+
+        # Return match indexed by state variable
+        try:
+            return self.matches[state]
+        except IndexError:
+            return None
 
 def main():
 
@@ -19,29 +45,35 @@ def main():
     signal, file_length = readfile(N)
 
     PFB = pfb.FilterBank(signal,N,file_length,'hamming')
-    PFB.split()
-    PFB.fft()
-    PFB.frequencies()
+    pfb_branched = PFB.split()
+    pfb_fft = PFB.fft(pfb_branched)
+    freqs = PFB.frequencies()
     
-    plotter(PFB)
+    plotter(freqs,pfb_fft,N)
 
 def readfile(N):
 
     if os.path.isdir("Data"): # Checks if Data/ subdirectory exists
 
         file_list = glob.glob('Data/*.csv') # Returns a list of CSV files in Data/
-        
+
         if len(file_list) > 0:
             
             print("Files in 'Data/' repository:")
             print("\n")
 
+            filenames = []
             for f in file_list:
+                filenames.append(f[5:-4])
                 print(f[5:-4])
             
             print("\n")
 
-            filename = str(input("Enter data filename:  "))
+            file_completer = FilenameCompleter(filenames)
+            readline.set_completer(file_completer.complete)
+            readline.parse_and_bind('tab: complete')
+
+            filename = input("Enter data filename:  ")
             signal = pd.read_csv("Data/" + filename + ".csv")
             
             file_length = len(signal['Signal'])
@@ -62,16 +94,16 @@ def readfile(N):
 
         else:
 
-            raise FileError("No files in 'Data/' repository")
+            raise ValueError("No files in 'Data/' repository")
 
     else:
 
-        raise FileError("No 'Data/' directory exists.")
+        raise ValueError("No 'Data/' directory exists.")
 
-def plotter(PFB):
+def plotter(x,y,N):
     
     plt.figure()
-    plt.plot(PFB.freqs,np.abs(PFB.signal_f[:PFB.N//2]))
+    plt.plot(x,np.abs(y[:N//2]))
 
 main()
 plt.show()

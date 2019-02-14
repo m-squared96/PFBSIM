@@ -54,14 +54,16 @@ class FilterBank:
             first = last
             last = m*self.N
 
-        self.filtered = filtered
+        return filtered
 
-    def fft(self):
-        self.signal_f = np.fft.fft(self.filtered,n=self.N)
+    def fft(self,x):
+        
+        return np.fft.fft(x,n=self.N)
 
     def frequencies(self):
         t_space = self.time_array[1] - self.time_array[0]
-        self.freqs = np.linspace(0.0,1/2*t_space,self.N//2)
+        
+        return np.linspace(0.0,1/2*t_space,self.N//2)
 
 def dB(X):
     return 10*np.log10(abs(X))
