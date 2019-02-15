@@ -61,9 +61,19 @@ class FilterBank:
         return np.fft.fft(x,n=self.N)
 
     def frequencies(self):
-        t_space = self.time_array[1] - self.time_array[0]
+        running_interval = 0
+        pos = 0
+
+        while pos < len(self.time_array) - 1:
+    
+            running_interval += self.time_array[pos + 1] - self.time_array[pos]
+    
+            pos += 1
+    
+        sampling_interval = running_interval/(len(self.time_array) - 1)
+        sampling_frequency = 1/sampling_interval
         
-        return np.linspace(0.0,1/2*t_space,self.N//2)
+        return np.fft.fftfreq(self.N) * sampling_frequency
 
 def dB(X):
     return 10*np.log10(abs(X))

@@ -103,7 +103,7 @@ def readfile(N):
 def plotter(x,y,N):
     
     plt.figure()
-    plt.plot(x,np.abs(y[:N//2]))
+    plt.plot(x,np.abs(y))
 
 main()
 plt.show()
