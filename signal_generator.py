@@ -5,6 +5,9 @@ import os
 import numpy as np
 import pandas as pd
 
+#TODO: Rebuild to generate file based on a constant sampling frequency
+# Assume sampling frequency of about 1MHz 
+
 def signal_output(time_array,complexity,noise_strength):
     '''
     Generates a Numpy array to specified length and complexity.
@@ -84,16 +87,20 @@ def directory_check():
         os.system("mkdir Data")
 
 def main():
-   
-    Npoint = 4096 
-    multiple = 500.789
 
-    time = np.linspace(0,10,Npoint*multiple)
-    signal,filename = signal_output(time,5,0.5)
+    Npoint = 4096 
+    multiple = 1000.789
+
+    fs = 1e6 # Sampling frequency
+    time_length = (Npoint*multiple)/fs
+
+    time = np.arange(0,time_length,1/fs)
+    
+    signal,filename = signal_output(time,1,0.0)
 
     print(filename)
 
-    filename = 'LgUe'
+    filename = 'SimpleLg'
 
     output_frame = pd.DataFrame({"Time":time, "Signal":signal})
 
@@ -104,4 +111,3 @@ def main():
     output_frame.to_csv("Data/" + filename + ".csv",index=False)
 
 main()
-

@@ -67,12 +67,10 @@ class FilterBank:
         while pos < len(self.time_array) - 1:
     
             running_interval += self.time_array[pos + 1] - self.time_array[pos]
-    
             pos += 1
     
         sampling_interval = running_interval/(len(self.time_array) - 1)
         sampling_frequency = 1/sampling_interval
-        
         return np.fft.fftfreq(self.N) * sampling_frequency
 
 def dB(X):
