@@ -5,8 +5,7 @@ import os
 import numpy as np
 import pandas as pd
 
-def signal_output(time_array,complexity,noise_strength,method,sampling_frequency):
-    
+def signal_parent(time_array,complexity,noise_strength,method,sampling_frequency):
     if method in ('wave','mkid'):
         signal = np.zeros(len(time_array))
 
@@ -17,41 +16,55 @@ def signal_output(time_array,complexity,noise_strength,method,sampling_frequency
             raise ValueError('Noise strength should be less than 1.0')
 
         if method == 'wave':
-            
-            coefficients = []
-            coeff_count = 1
-            while coeff_count <= complexity:
-                coefficients.append(np.random.randint(1,9))
-                coeff_count += 1
-            coefficients = normalise(coefficients)
+            signal,filename = wave_gen(signal,time_array,complexity,sampling_frequency)
 
-            frequencies = np.random.randint(low=1,high=5,size=complexity)*sampling_frequency/10
-            filename = "wave_" + str(complexity)
-
-            for f,c in zip(coefficients,frequencies):
-                signal += c*np.sin(f*2*np.pi*time_array)
-                filename += "_" + str(f)[:4]
-        
         elif method == 'mkid':
+            signal,filename = mkid_gen(signal,time_array,complexity,sampling_frequency)
             
-            # Assuming a lower frequency limit of 2GHz, mixed down to ~ 0.2MHz
-            min_freq = 2e5
-            res_count = 1
-            res_freq = min_freq
+        signal_frame = pd.DataFrame({'Time':time_array,'Signal':signal})
 
-            while res_count <= complexity:
-                signal += np.sin(res_freq*2*np.pi*time_array)
-                res_count += 1
-                res_freq += 2e3
-
-            max_freq = res_freq
-
-            filename = "mkid_" + str(complexity) + "_" + str(min_freq) + "_" + str(max_freq)
-
-        return signal,filename
+        return signal_frame,filename
 
     else:
         raise ValueError('"method" parameter should be set to either "wave" or "mkid"')
+
+def wave_gen(signal,time_array,complexity,sampling_frequency):
+    coefficients = []
+    coeff_count = 1
+    while coeff_count <= complexity:
+        coefficients.append(np.random.randint(1,9))
+        coeff_count += 1
+    coefficients = normalise(coefficients)
+
+    frequencies = np.random.randint(low=1,high=5,size=complexity)*sampling_frequency/10
+    filename = "wave_" + str(complexity)
+
+    for f,c in zip(coefficients,frequencies):
+        signal += c*np.sin(f*2*np.pi*time_array)
+        filename += "_" + str(f)[:4]
+    
+    return signal,filename
+
+def mkid_gen(signal,time_array,complexity,sampling_frequency):
+    min_freq = 2e9
+    max_freq = 4e9
+    freq_spacing = (max_freq-min_freq)/(complexity-1)
+
+    if freq_spacing < 2e6:
+        raise ValueError("Too many resonators: adjust bandwidth to accomodate")
+
+    elif freq_spacing >= 2e6:
+        res_freq = min_freq
+        res_count = 1
+
+        while res_count <= complexity:
+            signal += np.sin(res_freq*2*np.pi*time_array)
+            res_count += 1
+            res_freq += freq_spacing
+
+        filename = 'mkid_' + str(complexity) + '_' + str(min_freq/1e9) + '_' + str(max_freq/1e9)
+    
+    return signal,filename
 
 def normalise(vector):
     '''
@@ -74,25 +87,26 @@ def directory_check():
     '''
 
     if not(os.path.isdir("Data")):
+        print("Creating Data/ subdirectory")
         os.system("mkdir Data")
 
-def main():
+if __name__ == '__main__':
 
-    Npoint = 4096 
-    multiple = 1000.789
-    fs = 1e6 # Sampling frequency
+    Npoint = 4096
+    multiple = 1000
+    complexity = 20 # Number of signals/resonators
+    noise_strength = 0.05
+
+    fs = 1e10 # Sampling frequency
     time_length = (Npoint*multiple)/fs
     time = np.arange(0,time_length,1/fs)
-    
-    method = 'mkid'
-    signal, filename = signal_output(time,50,0.0,method,fs)
 
-    print(signal.shape)
-    print(filename)
-    output_frame = pd.DataFrame({"Time":time, "Signal":signal})
-    print("Signal data will be output to 'Data/' directory")
-
+    method = input('Enter signal type (wave/mkid):  ')
+    print('Generating file of type', method)
+    signal,filename = signal_parent(time,complexity,noise_strength,method,fs)
     directory_check()
-    output_frame.to_csv("Data/" + filename + ".csv",index=False)
+    print('\nOutput file:')
+    print('Location: Data/' + filename + ".csv")
+    print('Size:', str(signal.shape))
 
-main()
+    signal.to_csv('Data/' + filename + '.csv', index=False)

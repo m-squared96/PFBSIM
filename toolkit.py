@@ -57,7 +57,32 @@ class FilterBank:
         return filtered
 
     def fft(self,x):
+        return np.fft.fft(x,n=self.N)
+
+    def frequencies(self):
+        running_interval = 0
+        pos = 0
+
+        while pos < len(self.time_array) - 1:
+    
+            running_interval += self.time_array[pos + 1] - self.time_array[pos]
+            pos += 1
+    
+        sampling_interval = running_interval/(len(self.time_array) - 1)
+        sampling_frequency = 1/sampling_interval
+        return np.fft.fftfreq(self.N) * sampling_frequency
+
+class FFTGeneric:
+
+    def __init__(self,signal,N,file_length):
+        self.N = N
+        self.L = file_length
+
+        self.signal_array = np.array(signal['Signal'])
+        self.time_array = np.array(signal['Time'])
         
+
+    def fft(self,x):
         return np.fft.fft(x,n=self.N)
 
     def frequencies(self):

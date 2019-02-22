@@ -38,19 +38,6 @@ class FilenameCompleter:
         except IndexError:
             return None
 
-def main():
-
-    N = 4096 # Point spec for the FFT
-
-    signal, file_length = readfile(N)
-
-    PFB = pfb.FilterBank(signal,N,file_length,'hamming')
-    pfb_branched = PFB.split()
-    pfb_fft = PFB.fft(pfb_branched)
-    freqs = PFB.frequencies()
-    
-    plotter(freqs,pfb_fft,N)
-
 def readfile(N):
 
     if os.path.isdir("Data"): # Checks if Data/ subdirectory exists
@@ -104,6 +91,29 @@ def plotter(x,y,N):
     
     plt.figure()
     plt.plot(x,np.abs(y))
+
+def main():
+
+    N = 4096 # Point spec for the FFT
+
+    signal, file_length = readfile(N)
+
+    mode = input("Enter operational mode (pfb/fft):   ")
+    
+    if mode == 'pfb':
+
+        PFB = pfb.FilterBank(signal,N,file_length,'hamming')
+        pfb_branched = PFB.split()
+        fft = PFB.fft(pfb_branched)
+        freqs = PFB.frequencies()
+
+    elif mode == 'fft':
+
+        tool = pfb.FFTGeneric(signal,file_length,file_length)
+        fft = tool.fft(tool.signal_array)
+        freqs = tool.frequencies()
+    
+    plotter(freqs,fft,N)
 
 main()
 plt.show()
