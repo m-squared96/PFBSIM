@@ -31,6 +31,8 @@ class FilterBank:
         '''
 
         coefficients = get_window(self.window,self.L)
+        sinc = firwin(self.L,cutoff=1.0/self.N,window="rectangular")
+        coefficients *= sinc
         return coefficients
 
     def split(self):
