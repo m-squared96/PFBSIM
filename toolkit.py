@@ -5,7 +5,7 @@ from scipy.signal import get_window,firwin
 
 class FilterBank:
 
-    def __init__(self,signal,N,file_length,window):
+    def __init__(self,signal,N,file_length,window,lo):
         '''
         Accepts signal array and returns PFB output of signal.
         
@@ -18,6 +18,7 @@ class FilterBank:
         self.N = N
         self.L = file_length
         self.window = window
+        self.lo = lo
 
         self.signal_array = np.array(signal['Signal'])
         self.time_array = np.array(signal['Time'])
@@ -102,3 +103,8 @@ class FFTGeneric:
 
 def dB(X):
     return 10*np.log10(abs(X))
+
+def signal_mixer(signal,lo,time_array):
+    signal = np.array(signal,float)
+    time_array = np.array(time_array,float)
+    return np.sin(lo*2*np.pi*time_array)*signal

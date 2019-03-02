@@ -59,6 +59,7 @@ def mkid_gen(signal,time_array,complexity,sampling_frequency):
 
         while res_count <= complexity:
             signal += np.sin(res_freq*2*np.pi*time_array)
+            
             res_count += 1
             res_freq += freq_spacing
 
@@ -95,7 +96,7 @@ if __name__ == '__main__':
     Npoint = 4096
     multiple = 1000
     complexity = 20 # Number of signals/resonators
-    noise_strength = 0.05
+    noise_strength = 0.99
 
     fs = 1e10 # Sampling frequency
     time_length = (Npoint*multiple)/fs
@@ -104,6 +105,7 @@ if __name__ == '__main__':
     method = input('Enter signal type (wave/mkid):  ')
     print('Generating file of type', method)
     signal,filename = signal_parent(time,complexity,noise_strength,method,fs)
+    filename += "_N" + str(noise_strength)
     directory_check()
     print('\nOutput file:')
     print('Location: Data/' + filename + ".csv")

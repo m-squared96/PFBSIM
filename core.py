@@ -10,8 +10,6 @@ import matplotlib.pyplot as plt
 
 import toolkit as pfb
 
-#TODO: Match frequency array with observed spikes
-
 class FilenameCompleter:
 
     def __init__(self,filenames):
@@ -87,33 +85,37 @@ def readfile(N):
 
         raise ValueError("No 'Data/' directory exists.")
 
-def plotter(x,y,N):
-    
-    plt.figure()
-    plt.plot(x,np.abs(y))
-
 def main():
 
     N = 4096 # Point spec for the FFT
+    mixing_lo = 1.5e9 # Local oscillator frequency for the IQ mixer
 
     signal, file_length = readfile(N)
+    signal['Signal'] = pfb.signal_mixer(signal['Signal'],mixing_lo,signal['Time'])
 
     mode = input("Enter operational mode (pfb/fft):   ")
     
     if mode == 'pfb':
 
-        PFB = pfb.FilterBank(signal,N,file_length,'hamming')
+        PFB = pfb.FilterBank(signal,N,file_length,'hamming',1.5e9)
         pfb_branched = PFB.split()
         fft = PFB.fft(pfb_branched)
         freqs = PFB.frequencies()
+
+        plt.figure()
+        plt.plot(freqs,np.abs(fft),label="Unmixed")
+        #plt.plot(freqs,np.abs(mixed_fft),label="Mixed")
+        #plt.legend()
+        plt.xlim(left=0)
 
     elif mode == 'fft':
 
         tool = pfb.FFTGeneric(signal,file_length,file_length)
         fft = tool.fft(tool.signal_array)
         freqs = tool.frequencies()
-    
-    plotter(freqs,fft,N)
+
+        plt.figure()
+        plt.plot(freqs,np.abs(fft))
 
 main()
 plt.show()
