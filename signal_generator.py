@@ -5,25 +5,22 @@ import os
 import numpy as np
 import pandas as pd
 
+#TODO: Handle generic wave data generation
+
 def signal_parent(time_array,complexity,noise_strength,method,sampling_frequency):
     if method in ('wave','mkid'):
-        signal = np.zeros(len(time_array))
-
-        if noise_strength < 1.0:
-            signal += noise_strength*np.random.random(len(signal))
-
-        elif noise_strength >= 1.0:
-            raise ValueError('Noise strength should be less than 1.0')
+        signal = noise_strength*np.random.random(len(time_array))
 
         if method == 'wave':
             signal,filename = wave_gen(signal,time_array,complexity,sampling_frequency)
 
-        elif method == 'mkid':
-            signal,filename = mkid_gen(signal,time_array,complexity,sampling_frequency)
-            
-        signal_frame = pd.DataFrame({'Time':time_array,'Signal':signal})
+            return signal,filename
 
-        return signal_frame,filename
+        elif method == 'mkid':
+            signal,filename = mkid_gen(signal,time_array,complexity,sampling_frequency,perturbation=False)
+            signal_p,filename_p = mkid_gen(signal,time_array,complexity,sampling_frequency,perturbation=True)
+            
+            return signal,filename,signal_p,filename_p
 
     else:
         raise ValueError('"method" parameter should be set to either "wave" or "mkid"')
@@ -45,7 +42,7 @@ def wave_gen(signal,time_array,complexity,sampling_frequency):
     
     return signal,filename
 
-def mkid_gen(signal,time_array,complexity,sampling_frequency):
+def mkid_gen(signal,time_array,complexity,sampling_frequency,perturbation):
     min_freq = 2e9
     max_freq = 4e9
     freq_spacing = (max_freq-min_freq)/(complexity-1)
@@ -54,16 +51,32 @@ def mkid_gen(signal,time_array,complexity,sampling_frequency):
         raise ValueError("Too many resonators: adjust bandwidth to accomodate")
 
     elif freq_spacing >= 2e6:
-        res_freq = min_freq
-        res_count = 1
 
-        while res_count <= complexity:
-            signal += np.sin(res_freq*2*np.pi*time_array)
-            
-            res_count += 1
-            res_freq += freq_spacing
+        if not perturbation:
+            res_freq = min_freq
+            res_count = 1
+
+            while res_count <= complexity:
+                signal += np.sin(res_freq*2*np.pi*time_array)
+                
+                res_count += 1
+                res_freq += freq_spacing
+
+        elif perturbation:
+            delta = np.random.uniform(low=-1.0,high=1.0,size=complexity)
+            res_freq = min_freq
+            res_count = 1
+
+            while res_count <= complexity:
+                res_measured = res_freq + delta[int(complexity-1)]*1e6
+                signal += np.sin(res_measured*2*np.pi*time_array)
+
+                res_count += 1
+                res_freq += freq_spacing
 
         filename = 'mkid_' + str(complexity) + '_' + str(min_freq/1e9) + '_' + str(max_freq/1e9)
+        if perturbation:
+            filename += '_P'
     
     return signal,filename
 
@@ -93,6 +106,8 @@ def directory_check():
 
 if __name__ == '__main__':
 
+    directory_check()
+
     Npoint = 4096
     multiple = 1000
     complexity = 20 # Number of signals/resonators
@@ -104,11 +119,25 @@ if __name__ == '__main__':
 
     method = input('Enter signal type (wave/mkid):  ')
     print('Generating file of type', method)
-    signal,filename = signal_parent(time,complexity,noise_strength,method,fs)
-    filename += "_N" + str(noise_strength)
-    directory_check()
-    print('\nOutput file:')
-    print('Location: Data/' + filename + ".csv")
-    print('Size:', str(signal.shape))
 
-    signal.to_csv('Data/' + filename + '.csv', index=False)
+    if method == 'mkid':
+        signal,filename,signal_p,filename_p = signal_parent(time,complexity,noise_strength,method,fs)
+        sigframe,sigframe_p = pd.DataFrame(columns=['Time','Signal']),pd.DataFrame(columns=['Time','Signal'])
+        
+        print('\nOutput files:')
+
+        for name,sig,frame in zip((filename,filename_p),(signal,signal_p),(sigframe,sigframe_p)):
+            name += "_N" + str(noise_strength)
+            frame['Time'] = time
+            frame['Signal'] = sig
+
+            print('Location: Data/' + name + ".csv")
+            print('Size:', str(frame.shape))
+
+            frame.to_csv('Data/' + name + '.csv', index=False)
+
+        print("\nComplete.")
+
+    elif method =='wave':
+
+        print("Wave file generation under development")
