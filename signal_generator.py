@@ -111,7 +111,7 @@ if __name__ == '__main__':
     Npoint = 4096
     multiple = 1000
     complexity = 20 # Number of signals/resonators
-    noise_strength = 0.99
+    noise_strength = 5
 
     fs = 1e10 # Sampling frequency
     time_length = (Npoint*multiple)/fs

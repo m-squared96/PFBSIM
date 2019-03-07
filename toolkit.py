@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 import numpy as np
-from scipy.signal import get_window,firwin
+from scipy.signal import get_window,firwin,butter,sosfilt
 
 class FilterBank:
 
@@ -9,10 +9,11 @@ class FilterBank:
         '''
         Accepts signal array and returns PFB output of signal.
         
-        signal:     Signal data array
-        N:          N-point for FFT
-        s_length:   Signal branch length
-        window:     Window function
+        signal:         Signal data array
+        N:              N-point for FFT
+        file_length:    Length of signal/time arrays
+        window:         Window function
+        lo:             IQ mixer local oscillator frequency
         '''
 
         self.N = N
@@ -24,6 +25,9 @@ class FilterBank:
         self.time_array = np.array(signal['Time'])
 
         self.window_coeffs = self.window_function()
+        self.fs = fs_finder(self.time_array)
+
+        self.iq()
 
     def window_function(self):
         '''
@@ -59,52 +63,49 @@ class FilterBank:
 
         return filtered
 
-    def fft(self,x):
-        return np.fft.fft(x,n=self.N)
-
-    def frequencies(self):
-        running_interval = 0
-        pos = 0
-
-        while pos < len(self.time_array) - 1:
-    
-            running_interval += self.time_array[pos + 1] - self.time_array[pos]
-            pos += 1
-    
-        sampling_interval = running_interval/(len(self.time_array) - 1)
-        sampling_frequency = 1/sampling_interval
-        return np.fft.fftfreq(self.N) * sampling_frequency
+    def iq(self):
+        self.I,self.Q = iq_mixer(self.signal_array,2.2e6,self.time_array,self.fs)
 
 class FFTGeneric:
 
-    def __init__(self,signal,N,file_length):
+    def __init__(self,signal,N,file_length,lo):
         self.N = N
         self.L = file_length
+        self.lo = lo
 
         self.signal_array = np.array(signal['Signal'])
         self.time_array = np.array(signal['Time'])
-        
+        self.fs = fs_finder(self.time_array)
 
-    def fft(self,x):
-        return np.fft.fft(x,n=self.N)
+        self.iq()
 
-    def frequencies(self):
-        running_interval = 0
-        pos = 0
-
-        while pos < len(self.time_array) - 1:
-    
-            running_interval += self.time_array[pos + 1] - self.time_array[pos]
-            pos += 1
-    
-        sampling_interval = running_interval/(len(self.time_array) - 1)
-        sampling_frequency = 1/sampling_interval
-        return np.fft.fftfreq(self.N) * sampling_frequency
+    def iq(self):
+        self.I,self.Q = iq_mixer(self.signal_array,2.2e6,self.time_array,self.fs)
 
 def dB(X):
     return 10*np.log10(abs(X))
 
-def signal_mixer(signal,lo,time_array):
-    signal = np.array(signal,float)
-    time_array = np.array(time_array,float)
-    return np.sin(lo*2*np.pi*time_array)*signal
+def iq_mixer(signal,lo,time_array,fs):
+    inphase = lpf(signal*np.cos(2*np.pi*lo*time_array),4.1e6,fs)
+    quadrature = lpf(-1*signal*np.sin(2*np.pi*lo*time_array),4.1e6,fs)
+    return inphase,quadrature
+
+def lpf(signal,cutoff,fs):
+    lowpass = butter(10,cutoff,btype='low',analog=False,output='sos',fs=fs)
+    return sosfilt(lowpass,signal)
+
+def fs_finder(time_array):
+    running_interval = 0
+    pos = 0
+
+    while pos < len(time_array) - 1:
+
+        running_interval += time_array[pos + 1] - time_array[pos]
+        pos += 1
+
+    sampling_interval = running_interval/(len(time_array) - 1)
+    sampling_frequency = 1/sampling_interval
+    return sampling_frequency
+
+def fft(x,N):
+    return np.fft.fft(x,n=N)
