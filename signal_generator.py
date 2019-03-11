@@ -7,7 +7,7 @@ import pandas as pd
 
 #TODO: Handle generic wave data generation
 
-def signal_parent(time_array,complexity,noise_strength,method,sampling_frequency):
+def signal_parent(time_array,complexity,noise_strength,method,sampling_frequency,fmin,fmax):
     if method in ('wave','mkid'):
         signal = noise_strength*np.random.random(len(time_array))
 
@@ -17,8 +17,8 @@ def signal_parent(time_array,complexity,noise_strength,method,sampling_frequency
             return signal,filename
 
         elif method == 'mkid':
-            signal,filename = mkid_gen(signal,time_array,complexity,sampling_frequency,perturbation=False)
-            signal_p,filename_p = mkid_gen(signal,time_array,complexity,sampling_frequency,perturbation=True)
+            signal,filename = mkid_gen(signal,time_array,complexity,sampling_frequency,False,fmin,fmax)
+            signal_p,filename_p = mkid_gen(signal,time_array,complexity,sampling_frequency,True,fmin,fmax)
             
             return signal,filename,signal_p,filename_p
 
@@ -42,15 +42,16 @@ def wave_gen(signal,time_array,complexity,sampling_frequency):
     
     return signal,filename
 
-def mkid_gen(signal,time_array,complexity,sampling_frequency,perturbation):
-    min_freq = 2e9
-    max_freq = 4e9
+def mkid_gen(signal,time_array,complexity,sampling_frequency,perturbation,fmin,fmax):
+    min_freq = fmin
+    max_freq = fmax
     freq_spacing = (max_freq-min_freq)/(complexity-1)
 
     if freq_spacing < 2e6:
         raise ValueError("Too many resonators: adjust bandwidth to accomodate")
 
     elif freq_spacing >= 2e6:
+        lut_gen(fmin,fmax,freq_spacing,complexity)
 
         if not perturbation:
             res_freq = min_freq
@@ -80,6 +81,24 @@ def mkid_gen(signal,time_array,complexity,sampling_frequency,perturbation):
     
     return signal,filename
 
+def lut_gen(fmin,fmax,spacing,res_count):
+    lut_filename = "LUTs/LUT_" + str(res_count) + "_" + str(fmin/1e9) + "_" + str(fmax/1e9) + ".npy"
+    if not(os.path.isfile(lut_filename)):
+        print("\nGenerating LUT file:")
+        print("Min. Frequency: " + str(fmin/1e9) + "GHz")
+        print("Max. Frequency: " + str(fmax/1e9) + "GHz")
+        print("Number of Resonators: " + str(res_count))
+        print("Location: " + lut_filename)
+        f = fmin
+        flist = []
+
+        while f <= fmax:
+            flist.append(f)
+            f += spacing
+
+        flist = np.array(flist,float)
+        np.save(lut_filename,flist)
+
 def normalise(vector):
     '''
     Takes a vector and returns the normalised vector
@@ -104,6 +123,10 @@ def directory_check():
         print("Creating Data/ subdirectory")
         os.system("mkdir Data")
 
+    if not(os.path.isdir("LUTs")):
+        print("Creating LUTs/ subdirectory")
+        os.system("mkdir LUTs")
+
 if __name__ == '__main__':
 
     directory_check()
@@ -111,20 +134,24 @@ if __name__ == '__main__':
     Npoint = 4096
     multiple = 1000
     complexity = 20 # Number of signals/resonators
-    noise_strength = 5
+    noise_strength = 0.5
+
+    # Define min and max resonator frequencies for use in MKID file generation
+    min_freq = 2.0e9
+    max_freq = 4.0e9
 
     fs = 1e10 # Sampling frequency
     time_length = (Npoint*multiple)/fs
     time = np.arange(0,time_length,1/fs)
 
     method = input('Enter signal type (wave/mkid):  ')
-    print('Generating file of type', method)
+    print('Generating files of type', method)
 
     if method == 'mkid':
-        signal,filename,signal_p,filename_p = signal_parent(time,complexity,noise_strength,method,fs)
+        signal,filename,signal_p,filename_p = signal_parent(time,complexity,noise_strength,method,fs,min_freq,max_freq)
         sigframe,sigframe_p = pd.DataFrame(columns=['Time','Signal']),pd.DataFrame(columns=['Time','Signal'])
         
-        print('\nOutput files:')
+        print('\nData files:')
 
         for name,sig,frame in zip((filename,filename_p),(signal,signal_p),(sigframe,sigframe_p)):
             name += "_N" + str(noise_strength)
