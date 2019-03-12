@@ -3,9 +3,11 @@
 import numpy as np
 from scipy.signal import get_window,firwin,butter,sosfilt
 
+#TODO: Split FFTs
+
 class FilterBank:
 
-    def __init__(self,signal,N,file_length,window,lo):
+    def __init__(self,signal,N,file_length,window,lo,lut):
         '''
         Accepts signal array and returns PFB output of signal.
         
@@ -20,6 +22,7 @@ class FilterBank:
         self.L = file_length
         self.window = window
         self.lo = lo
+        self.lut = lut
 
         self.signal_array = np.array(signal['Signal'])
         self.time_array = np.array(signal['Time'])
@@ -28,6 +31,8 @@ class FilterBank:
         self.fs = fs_finder(self.time_array)
 
         self.iq()
+        self.I_fir,self.Q_fir = self.split(self.I),self.split(self.Q)
+        self.I_fft,self.Q_fft = fft(self.I_fir,N=self.N),fft(self.Q_fir,N=self.N)
 
     def window_function(self):
         '''
@@ -40,11 +45,13 @@ class FilterBank:
         coefficients *= sinc
         return coefficients
 
-    def split(self):
+    def split(self,x):
         '''
         Accepts a signal and window function, each of length m*N, and
         divides both into m branches of length N.
         '''
+
+        x = np.array(x)
 
         filtered = np.zeros(self.N)
         m_max = self.L//self.N
@@ -55,7 +62,7 @@ class FilterBank:
 
         while m <= m_max:
             
-            filtered += self.signal_array[first:last]*self.window_coeffs[first:last]
+            filtered += x[first:last]*self.window_coeffs[first:last]
             
             m += 1
             first = last
@@ -64,7 +71,7 @@ class FilterBank:
         return filtered
 
     def iq(self):
-        self.I,self.Q = iq_mixer(self.signal_array,2.2e6,self.time_array,self.fs)
+        self.I,self.Q = iq_mixer(self.signal_array,2.2e9,self.time_array,self.fs)
 
 class FFTGeneric:
 
@@ -78,16 +85,17 @@ class FFTGeneric:
         self.fs = fs_finder(self.time_array)
 
         self.iq()
+        self.I_fft,self.Q_fft = fft(self.I,N=self.N),fft(self.Q,N=self.N)
 
     def iq(self):
-        self.I,self.Q = iq_mixer(self.signal_array,2.2e6,self.time_array,self.fs)
+        self.I,self.Q = iq_mixer(self.signal_array,2.2e9,self.time_array,self.fs)
 
 def dB(X):
     return 10*np.log10(abs(X))
 
 def iq_mixer(signal,lo,time_array,fs):
-    inphase = lpf(signal*np.cos(2*np.pi*lo*time_array),4.1e6,fs)
-    quadrature = lpf(-1*signal*np.sin(2*np.pi*lo*time_array),4.1e6,fs)
+    inphase = lpf(signal*np.cos(2*np.pi*lo*time_array),3e9,fs)
+    quadrature = lpf(-1*signal*np.sin(2*np.pi*lo*time_array),3e9,fs)
     return inphase,quadrature
 
 def lpf(signal,cutoff,fs):
@@ -109,3 +117,16 @@ def fs_finder(time_array):
 
 def fft(x,N):
     return np.fft.fft(x,n=N)
+
+def channel_selector(fft_signal,freqs_array,no_channels):
+    '''
+    Accepts FFT output (from -fmax < 0 < fmax) and evenly divides
+    this signal into an evenly spaced, specified number of channels
+
+    fft_signal:         Numpy FFT output
+    freqs_array:        Numpy fftfreq output
+    no_channels:        Desired number of evenly-spaced channels
+    '''
+    fft_signal = np.array(fft_signal)
+
+    print("x")

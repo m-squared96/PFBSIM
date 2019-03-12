@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 
 import toolkit as pfb
 
+#TODO: Split FFTs
+
 class FilenameCompleter:
 
     def __init__(self,filenames):
@@ -75,7 +77,7 @@ def readfile(N):
                 signal = signal[:file_length]
                 print('File concatenated to length', str(file_length))
 
-            return signal, file_length
+            return signal, file_length, filename
 
         else:
 
@@ -85,41 +87,53 @@ def readfile(N):
 
         raise ValueError("No 'Data/' directory exists.")
 
-def pfb_handler(signal,Npoint,file_length,window,lo):
+def pfb_handler(signal,Npoint,file_length,window,lo,lut):
 
-    PFB = pfb.FilterBank(signal,Npoint,file_length,window,lo)
-    pfb_branched = PFB.split()
-
-    fft = pfb.fft(pfb_branched,PFB.N)
+    PFB = pfb.FilterBank(signal,Npoint,file_length,window,lo,lut)
     freqs = np.fft.fftfreq(n=PFB.N)*PFB.fs
 
     plt.figure()
-    plt.plot(freqs,np.abs(fft),label="Unmixed")
+    plt.plot(freqs,np.abs(PFB.I_fft + PFB.Q_fft))
     #plt.plot(freqs,np.abs(mixed_fft),label="Mixed")
     #plt.legend()
-    plt.xlim(left=0)
 
 def fft_handler(signal,Npoint,file_length,lo):
 
-    tool = pfb.FFTGeneric(signal,Npoint,file_length)
-    
-    fft = pfb.fft(tool.signal_array,tool.N)
+    tool = pfb.FFTGeneric(signal,Npoint,file_length,lo)
     freqs = np.fft.fftfreq(n=tool.N)*tool.fs
 
-    plt.figure()
-    plt.plot(freqs,np.abs(fft))
+    # plt.figure()
+    # plt.plot(freqs,np.abs(fft))
 
 def main():
 
     N = 4096 # Point spec for the FFT
-    mixing_lo = 1.5e9 # Local oscillator frequency for the IQ mixer
+    mixing_lo = 2.0e9 # Local oscillator frequency for the IQ mixer
 
-    signal, file_length = readfile(N)
+    min_freq = 2.0e9
+    max_freq = 4.0e9
+
+    signal, file_length, filename = readfile(N)
 
     mode = input("Enter operational mode (pfb/fft):   ")
     
     if mode == 'pfb':
-        pfb_handler(signal,N,file_length,'hamming',mixing_lo)        
+        num_str = filename[5:7]
+        fmin_str = filename[8:11]
+        fmax_str = filename[12:15]
+        lut_filename = "LUTs/LUT_" + num_str + "_" + fmin_str + "_" + fmax_str + ".npy"
+
+        print("Attempting to load LUT file: " + lut_filename)
+
+        try:
+            lut = np.load(lut_filename)
+            print("Loaded LUT file successfully")
+
+        except FileNotFoundError:
+            lut = None
+            print("LUT file not loaded, fine channelisation cannot occur")
+
+        pfb_handler(signal,N,file_length,'hamming',mixing_lo,lut)        
 
     elif mode == 'fft':
         fft_handler(signal,N,file_length,mixing_lo)        
