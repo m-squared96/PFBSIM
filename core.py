@@ -93,9 +93,9 @@ def pfb_handler(signal,Npoint,file_length,window,lo,lut):
     freqs = np.fft.fftfreq(n=PFB.N)*PFB.fs
 
     plt.figure()
-    plt.plot(freqs,np.abs(PFB.I_fft + PFB.Q_fft))
-    #plt.plot(freqs,np.abs(mixed_fft),label="Mixed")
-    #plt.legend()
+    plt.plot(freqs,np.abs(PFB.I_fft + PFB.Q_fft),label='Mixed Amplitude')
+    plt.plot(freqs,np.abs(PFB.temp_fft),label='Raw')
+    plt.legend()
 
 def fft_handler(signal,Npoint,file_length,lo):
 
@@ -123,7 +123,7 @@ def main():
         fmax_str = filename[12:15]
         lut_filename = "LUTs/LUT_" + num_str + "_" + fmin_str + "_" + fmax_str + ".npy"
 
-        print("Attempting to load LUT file: " + lut_filename)
+        print("\nAttempting to load LUT file: " + lut_filename)
 
         try:
             lut = np.load(lut_filename)

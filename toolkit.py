@@ -34,6 +34,9 @@ class FilterBank:
         self.I_fir,self.Q_fir = self.split(self.I),self.split(self.Q)
         self.I_fft,self.Q_fft = fft(self.I_fir,N=self.N),fft(self.Q_fir,N=self.N)
 
+        self.temp_split = self.split(self.signal_array)
+        self.temp_fft = fft(self.temp_split,N=self.N)
+
     def window_function(self):
         '''
         Accepts the name of a window function and an integer length, and
@@ -94,8 +97,8 @@ def dB(X):
     return 10*np.log10(abs(X))
 
 def iq_mixer(signal,lo,time_array,fs):
-    inphase = lpf(signal*np.cos(2*np.pi*lo*time_array),3e9,fs)
-    quadrature = lpf(-1*signal*np.sin(2*np.pi*lo*time_array),3e9,fs)
+    inphase = signal*np.cos(2*np.pi*lo*time_array)
+    quadrature = -1*signal*np.sin(2*np.pi*lo*time_array)
     return inphase,quadrature
 
 def lpf(signal,cutoff,fs):
