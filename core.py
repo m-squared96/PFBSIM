@@ -87,15 +87,13 @@ def readfile(N):
 
         raise ValueError("No 'Data/' directory exists.")
 
-def pfb_handler(signal,Npoint,file_length,window,lo,lut):
+def pfb_handler(signal,Npoint,file_length,window,lo,lut,lpf_cutoff,taps):
 
-    PFB = pfb.FilterBank(signal,Npoint,file_length,window,lo,lut)
-    freqs = np.fft.fftfreq(n=PFB.N)*PFB.fs
+    PFB = pfb.FilterBank(signal,Npoint,file_length,window,lo,lut,lpf_cutoff,taps)
 
     plt.figure()
-    plt.plot(freqs,np.abs(PFB.I_fft + PFB.Q_fft),label='Mixed Amplitude')
-    plt.plot(freqs,np.abs(PFB.temp_fft),label='Raw')
-    plt.legend()
+    plt.plot(PFB.freqs,np.abs(PFB.I_fft + PFB.Q_fft))
+    #plt.xlim(0,lpf_cutoff)
 
 def fft_handler(signal,Npoint,file_length,lo):
 
@@ -109,9 +107,8 @@ def main():
 
     N = 4096 # Point spec for the FFT
     mixing_lo = 2.0e9 # Local oscillator frequency for the IQ mixer
-
-    min_freq = 2.0e9
-    max_freq = 4.0e9
+    lpf_cutoff = 2.1e9 # -3dB point of Butterworth IIR LPF
+    taps = 4 # PFB taps
 
     signal, file_length, filename = readfile(N)
 
@@ -133,7 +130,7 @@ def main():
             lut = None
             print("LUT file not loaded, fine channelisation cannot occur")
 
-        pfb_handler(signal,N,file_length,'hamming',mixing_lo,lut)        
+        pfb_handler(signal,N,file_length,'hamming',mixing_lo,lut,lpf_cutoff,taps)        
 
     elif mode == 'fft':
         fft_handler(signal,N,file_length,mixing_lo)        
