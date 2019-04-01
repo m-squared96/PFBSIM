@@ -3,11 +3,11 @@
 import numpy as np
 from scipy.signal import get_window,firwin,iirfilter,sosfilt
 
-#TODO: Split FFTs
+#TODO: Signal reshaping/bin selection
 
 class FilterBank:
 
-    def __init__(self,signal,N,file_length,window,lo,lut,lpf_cutoff,taps):
+    def __init__(self,signal,PFBdict,Sigdict,DSPdict):
         '''
         Accepts signal array and returns PFB output of signal.
         
@@ -17,18 +17,22 @@ class FilterBank:
         window:         Window function
         lo:             IQ mixer local oscillator frequency
         '''
+        # PFBdict parameters
+        self.N = PFBdict['N']
+        self.taps = PFBdict['taps']
+        self.window = PFBdict['window']
+        # Sigdict parameters
+        self.L = Sigdict['length']
+        self.lut = Sigdict['lut']
+        self.complexity = Sigdict['complexity']
+        # DSPdict parameters
+        self.lo = DSPdict['lo']
+        self.mixing = DSPdict['mixing']
+        self.lpf_cutoff = DSPdict['lpf']
 
-        self.N = N
-        self.L = file_length
-        self.window = window
-        self.lo = lo
-        self.lpf_cutoff = lpf_cutoff
-        self.lut = lut
-        self.taps = taps
-
+        # Data and variables derived from the above
         self.signal_array = np.array(signal['Signal'])
         self.time_array = np.array(signal['Time'])
-
         self.window_coeffs = self.window_function()
         self.fs = fs_finder(self.time_array)
 
@@ -42,7 +46,7 @@ class FilterBank:
         
         print("Coarse channelisation complete")
 
-        self.fine_channelisation(self.N//2)
+        self.fine_channelisation(self.complexity)
 
     def window_function(self):
         '''
@@ -51,7 +55,7 @@ class FilterBank:
         '''
 
         coefficients = get_window(self.window,self.L)
-        sinc = firwin(self.L,cutoff=1.0/self.N,window="rectangular")
+        sinc = firwin(self.L,cutoff=self.taps/self.L,window="rectangular")
         coefficients *= sinc
         return coefficients
 
@@ -66,7 +70,11 @@ class FilterBank:
         return np.sum(x_win,axis=0)
 
     def iq(self):
-        self.I,self.Q = iq_mixer(self.signal_array,self.lo,self.time_array,self.fs,self.lpf_cutoff)
+        if self.mixing:
+            self.I,self.Q = iq_mixer(self.signal_array,self.lo,self.time_array,self.fs,self.lpf_cutoff)
+
+        else:
+            self.I,self.Q = self.signal_array,self.signal_array
 
     def fine_channelisation(self,no_channels):
         if self.lut is None:
@@ -75,14 +83,20 @@ class FilterBank:
         elif self.lut is not None:
             print('\nBeginning fine channelisation')
             bins,bin_frequencies = channel_selector((self.I_fft + self.Q_fft),self.freqs,no_channels)
+            print(bins.shape)
 
 class FFTGeneric:
 
-    def __init__(self,signal,N,file_length,lo,lpf_cutoff):
+    def __init__(self,signal,N,Sigdict,DSPdict):
+        
         self.N = N
-        self.L = file_length
-        self.lo = lo
-        self.lpf_cutoff = lpf_cutoff
+
+        # Sigdict parameters
+        self.L = Sigdict['length']
+        # DSPdict parameters
+        self.lo = DSPdict['lo']
+        self.mixing = DSPdict['mixing']
+        self.lpf_cutoff = DSPdict['lpf']
 
         self.signal_array = np.array(signal['Signal'])
         self.time_array = np.array(signal['Time'])
@@ -92,7 +106,11 @@ class FFTGeneric:
         self.I_fft,self.Q_fft = fft(self.I,N=self.N),fft(self.Q,N=self.N)
 
     def iq(self):
-        self.I,self.Q = iq_mixer(self.signal_array,self.lo,self.time_array,self.fs,self.lpf_cutoff)
+        if self.mixing:
+            self.I,self.Q = iq_mixer(self.signal_array,self.lo,self.time_array,self.fs,self.lpf_cutoff)
+
+        else:
+            self.I,self.Q = self.signal_array,self.signal_array
 
 def dB(X):
     return 10*np.log10(abs(X))
