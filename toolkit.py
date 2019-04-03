@@ -25,6 +25,9 @@ class FilterBank:
         self.L = Sigdict['length']
         self.lut = Sigdict['lut']
         self.complexity = Sigdict['complexity']
+        self.bandwidth = Sigdict['bandwidth']
+        self.fmax = Sigdict['fmax']
+        self.fmin = Sigdict['fmin']
         # DSPdict parameters
         self.lo = DSPdict['lo']
         self.mixing = DSPdict['mixing']
@@ -35,6 +38,7 @@ class FilterBank:
         self.time_array = np.array(signal['Time'])
         self.window_coeffs = self.window_function()
         self.fs = fs_finder(self.time_array)
+        self.bin_width = self.fs/self.N
 
         self.iq()
 
@@ -72,7 +76,6 @@ class FilterBank:
     def iq(self):
         if self.mixing:
             self.I,self.Q = iq_mixer(self.signal_array,self.lo,self.time_array,self.fs,self.lpf_cutoff)
-
         else:
             self.I,self.Q = self.signal_array,self.signal_array
 
@@ -82,8 +85,30 @@ class FilterBank:
 
         elif self.lut is not None:
             print('\nBeginning fine channelisation')
-            bins,bin_frequencies = channel_selector((self.I_fft + self.Q_fft),self.freqs,no_channels)
-            print(bins.shape)
+            
+            if self.mixing:
+                start_freq = self.fmin - self.lo
+                start_bin = int(start_freq/self.bin_width)
+
+            elif not self.mixing:
+                start_freq = self.fmin
+                start_bin = int(start_freq/self.bin_width) - 1
+
+            end_freq = start_freq + self.bandwidth            
+            end_bin = int(end_freq/self.bin_width) + 1
+
+            pos_freqs = self.freqs[start_bin:end_bin]
+            pos_I = self.I_fft[start_bin:end_bin]
+            pos_Q = self.Q_fft[start_bin:end_bin]
+
+            bins,bin_frequencies = channel_selector((pos_I + pos_Q),pos_freqs,no_channels)
+
+            # import matplotlib.pyplot as plt
+            # plt.figure()
+            # for i in range(bins.shape[0]):
+            #     plt.plot(bin_frequencies[i],np.abs(bins[i]))
+
+            
 
 class FFTGeneric:
 
@@ -149,8 +174,6 @@ def channel_selector(fft_signal,freqs_array,no_channels):
     freqs_array:        Numpy fftfreq output
     no_channels:        Desired number of evenly-spaced channels
     '''
-    fft_signal = np.array(fft_signal)
-    freqs_array = np.array(fft_signal)
 
     l_fft = np.shape(fft_signal)[0]
     l_freqs = np.shape(freqs_array)[0]
@@ -180,5 +203,5 @@ def channel_selector(fft_signal,freqs_array,no_channels):
         return bins,freq_bins
 
     elif l_fft != l_freqs:
-        print("Fine channelisation could not occur. Lengths of FFT and frequency arrays do not match")
+        print("Channel selection could not occur. Lengths of FFT and frequency arrays do not match")
         return 0,0
