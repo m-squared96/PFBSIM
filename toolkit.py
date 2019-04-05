@@ -95,20 +95,71 @@ class FilterBank:
                 start_bin = int(start_freq/self.bin_width) - 1
 
             end_freq = start_freq + self.bandwidth            
-            end_bin = int(end_freq/self.bin_width) + 1
+            end_bin = int(end_freq/self.bin_width) + 3
 
             pos_freqs = self.freqs[start_bin:end_bin]
             pos_I = self.I_fft[start_bin:end_bin]
             pos_Q = self.Q_fft[start_bin:end_bin]
 
+            # Bins = FFT signal divided into bins
+            # Bin_frequencies = Frequency array divided into bins
             bins,bin_frequencies = channel_selector((pos_I + pos_Q),pos_freqs,no_channels)
 
             # import matplotlib.pyplot as plt
             # plt.figure()
             # for i in range(bins.shape[0]):
             #     plt.plot(bin_frequencies[i],np.abs(bins[i]))
+            # plt.axvline(bin_frequencies[2][int(bins[2].argmax())],color='red')
 
-            
+            fpeak_list = []
+            delta_flist = []
+            for i in range(bins.shape[0]):
+                bin_fpeak_pos = int(bins[i].argmax())
+                fpeak_list.append(bin_frequencies[i][bin_fpeak_pos])
+                if self.mixing:
+                    delta_f = bin_frequencies[i][bin_fpeak_pos] - (self.lut[i] - self.lo)
+                elif not(self.mixing):
+                    delta_f = bin_frequencies[i][bin_fpeak_pos] - self.lut[i]
+                delta_flist.append(np.abs(delta_f))
+
+            self.fpeak_list = fpeak_list
+            self.delta_flist = delta_flist
+            self.frequency_isolation()
+
+            delta_signals = np.empty((0,len(self.time_array)),float)
+            for f in delta_flist:
+                delta_signal = np.sin(2*np.pi*f*self.time_array)
+                delta_signals = np.vstack([delta_signals,delta_signal])
+
+            self.delta_signals = delta_signals
+            self.digital_down_conversion()
+
+    def frequency_isolation(self):
+        bandpass_list = []
+        for f in self.fpeak_list:
+            bandpass_list.append((f - 0.25e6,f + 0.25e6))
+
+        singlespike_signals = np.empty((0,len(self.signal_array)),float)
+        for bp_range in bandpass_list:
+            singlespike_signals = np.vstack([singlespike_signals,bpf(self.signal_array,bp_range,self.fs)])
+
+        self.singlespike_signals = singlespike_signals
+
+    def digital_down_conversion(self):
+        ddc_signals_higher = np.empty((0,len(self.signal_array)),float)
+        ddc_signals_lower = np.empty((0,len(self.signal_array)),float)
+
+        sigs = self.singlespike_signals.shape[0]
+        deltas = self.delta_signals.shape[0]
+
+        for sig,delta in zip(range(sigs),range(deltas)):
+
+            mixed_sig = self.singlespike_signals[sig]*self.delta_signals[delta]
+            low_sig = lpf(mixed_sig,(self.fpeak_list[sig] - self.delta_flist[delta]) + 0.25e6,fs=self.fs)
+            high_sig = hpf(mixed_sig,(self.fpeak_list[sig] + self.delta_flist[delta]) - 0.25e6,fs=self.fs)
+
+            ddc_signals_lower = np.vstack([ddc_signals_lower,low_sig])
+            ddc_signals_higher = np.vstack([ddc_signals_higher,high_sig])
 
 class FFTGeneric:
 
@@ -148,6 +199,14 @@ def iq_mixer(signal,lo,time_array,fs,lpf_cutoff):
 def lpf(signal,cutoff,fs):
     lowpass = iirfilter(17,cutoff,btype='low',output='sos',fs=fs)
     return sosfilt(lowpass,signal)
+
+def hpf(signal,cutoff,fs):
+    highpass = iirfilter(17,cutoff,btype='high',output='sos',fs=fs)
+    return sosfilt(highpass,signal)
+
+def bpf(signal,f_range,fs):
+    bandpass = iirfilter(17,f_range,btype='band',output='sos',fs=fs)
+    return sosfilt(bandpass,signal)
 
 def fs_finder(time_array):
     running_interval = 0
