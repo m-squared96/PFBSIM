@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 
 import toolkit as pfb
 
-#TODO: Signal reshaping/bin selection
 
 class FilenameCompleter:
 
@@ -87,25 +86,28 @@ def readfile(N):
 
 def pfb_handler(signal,PFBdict,Sigdict,DSPdict):
 
-    PFB = pfb.FilterBank(signal,PFBdict,Sigdict,DSPdict)
+    signal_array = signal['Signal']
+    time_array = signal['Time']
+
+    PFB = pfb.FilterBank(signal_array,time_array,PFBdict,Sigdict,DSPdict)
 
     plt.figure()
-    plt.plot(PFB.freqs,np.abs(PFB.I_fft + PFB.Q_fft))
-    plt.xlim(0,PFB.fs/2)
-    #plt.xlim(0,lpf_cutoff)
+    plt.plot(PFB.freqs,np.abs(PFB.fft))
 
 def fft_handler(signal,N,Sigdict,DSPdict):
 
-    tool = pfb.FFTGeneric(signal,N,Sigdict,DSPdict)
-    freqs = np.fft.fftfreq(n=tool.N)*tool.fs
+    signal_array = signal['Signal']
+    time_array = signal['Time']
+
+    tool = pfb.FFTGeneric(signal_array,time_array,N,Sigdict,DSPdict)
 
     plt.figure()
-    plt.plot(freqs,np.abs(tool.I_fft + tool.Q_fft))
+    plt.plot(tool.freqs,np.abs(tool.fft))
 
 def main():
 
     N = 2048 # Point spec for the FFT
-    mixing = False
+    mixing = False 
     mixing_lo = 2.0e9 # Local oscillator frequency for the IQ mixer
     lpf_cutoff = 2.1e9 # -3dB point of Butterworth IIR LPF
     taps = 4 # PFB taps
@@ -120,15 +122,19 @@ def main():
     DSPdict = {
         'lo':mixing_lo,
         'mixing':mixing,
-        'lpf':lpf_cutoff
+        'lpf':lpf_cutoff,
+        'overlap':True
     }
 
     mode = input("Enter operational mode (pfb/fft):   ")
     
     if mode == 'pfb':
-        num_str = filename[5:8]
-        fmin_str = filename[9:12]
-        fmax_str = filename[13:16]
+
+        filename_components = tuple(filename.split('_'))
+        num_str = filename_components[1]
+        fmin_str = filename_components[2]
+        fmax_str = filename_components[3]
+
         lut_filename = "LUTs/LUT_" + num_str + "_" + fmin_str + "_" + fmax_str + ".npy"
 
         print("\nAttempting to load LUT file: " + lut_filename)
@@ -149,6 +155,9 @@ def main():
 
         Sigdict['lut'] = lut
         Sigdict['complexity'] = int(num_str)
+        Sigdict['bandwidth'] = float(float(fmax_str) - float(fmin_str))*1e9
+        Sigdict['fmax'] = float(fmax_str)*1e9
+        Sigdict['fmin'] = float(fmin_str)*1e9
 
         pfb_handler(signal,PFBdict,Sigdict,DSPdict)
 
