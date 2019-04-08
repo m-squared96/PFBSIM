@@ -33,6 +33,7 @@ class FilterBank:
         self.overlap = DSPdict['overlap']
 
         # Data and variables derived from the above
+
         if type(signal) is np.ndarray:
             self.signal_array = signal
         elif type(signal) is not np.ndarray:
@@ -171,7 +172,7 @@ class FilterBank:
 
 class FFTGeneric:
 
-    def __init__(self,signal,N,Sigdict,DSPdict):
+    def __init__(self,signal,time,N,Sigdict,DSPdict):
         
         self.N = N
 
@@ -181,13 +182,32 @@ class FFTGeneric:
         self.lo = DSPdict['lo']
         self.mixing = DSPdict['mixing']
         self.lpf_cutoff = DSPdict['lpf']
+        self.overlap = DSPdict['overlap']
 
-        self.signal_array = np.array(signal['Signal'])
-        self.time_array = np.array(signal['Time'])
+        # Data derived from above parameters
+        if type(signal) is np.ndarray:
+            self.signal_array = signal
+        elif type(signal) is not np.ndarray:
+            self.signal_array = np.array(signal)
+
+        if type(time) is np.ndarray:
+            self.time_array = time
+        elif type(time) is not np.ndarray:
+            self.time_array = np.array(time)
+
         self.fs = fs_finder(self.time_array)
-
         self.iq()
         self.I_fft,self.Q_fft = fft(self.I,N=self.N),fft(self.Q,N=self.N)
+
+        if self.overlap:
+            self.bin_width = self.fs/(self.N*2)
+            self.fft = self.fft_overlap()
+            self.freqs = np.fft.fftfreq(n=self.N*2)*self.fs
+
+        else:
+            self.bin_width = self.fs/self.N
+            self.fft = self.I_fft
+            self.freqs = np.fft.fftfreq(n=self.N)*self.fs
 
     def iq(self):
         if self.mixing:
@@ -195,6 +215,14 @@ class FFTGeneric:
 
         else:
             self.I,self.Q = self.signal_array,self.signal_array
+
+    def fft_overlap(self):
+        fft = []
+        for i in range(self.N):
+            fft.append(self.I_fft[i])
+            fft.append(self.Q_fft[i])
+
+        return np.array(fft)
 
 def dB(X):
     return 10*np.log10(abs(X))
