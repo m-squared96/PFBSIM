@@ -3,11 +3,9 @@
 import numpy as np
 from scipy.signal import get_window,firwin,iirfilter,sosfilt
 
-#TODO: Signal reshaping/bin selection
-
 class FilterBank:
 
-    def __init__(self,signal,PFBdict,Sigdict,DSPdict):
+    def __init__(self,signal,time,PFBdict,Sigdict,DSPdict):
         '''
         Accepts signal array and returns PFB output of signal.
         
@@ -32,25 +30,45 @@ class FilterBank:
         self.lo = DSPdict['lo']
         self.mixing = DSPdict['mixing']
         self.lpf_cutoff = DSPdict['lpf']
+        self.overlap = DSPdict['overlap']
 
         # Data and variables derived from the above
-        self.signal_array = np.array(signal['Signal'])
-        self.time_array = np.array(signal['Time'])
+        if type(signal) is np.ndarray:
+            self.signal_array = signal
+        elif type(signal) is not np.ndarray:
+            self.signal_array = np.array(signal)
+
+        if type(time) is np.ndarray:
+            self.time_array = time
+        elif type(time) is not np.ndarray:
+            self.time_array = np.array(time)
+
         self.window_coeffs = self.window_function()
         self.fs = fs_finder(self.time_array)
-        self.bin_width = self.fs/self.N
-
         self.iq()
 
         print("\nBeginning coarse channelisation stage")
             
         self.I_fir,self.Q_fir = self.split(self.I),self.split(self.Q)
         self.I_fft,self.Q_fft = fft(self.I_fir,N=self.N),fft(self.Q_fir,N=self.N)
-        self.freqs = np.fft.fftfreq(n=self.N)*self.fs
+
+        if self.overlap:
+            self.bin_width = self.fs/(self.N*2)
+            self.fft = self.fft_overlap()
+            self.freqs = np.fft.fftfreq(n=self.N*2)*self.fs
+
+        else:
+            self.bin_width = self.fs/self.N
+            self.fft = self.I_fft
+            self.freqs = np.fft.fftfreq(n=self.N)*self.fs
         
         print("Coarse channelisation complete")
 
         self.fine_channelisation(self.complexity)
+        
+        #if self.lut is not None:
+        #    print('Phase conversion stage')
+        #    self.phase_conversion()
 
     def window_function(self):
         '''
@@ -79,6 +97,14 @@ class FilterBank:
         else:
             self.I,self.Q = self.signal_array,self.signal_array
 
+    def fft_overlap(self):
+        fft = []
+        for i in range(self.N):
+            fft.append(self.I_fft[i])
+            fft.append(self.Q_fft[i])
+
+        return np.array(fft)
+
     def fine_channelisation(self,no_channels):
         if self.lut is None:
             print('\nFine channelisation cannot occur due to issues with LUT.')
@@ -98,68 +124,50 @@ class FilterBank:
             end_bin = int(end_freq/self.bin_width) + 3
 
             pos_freqs = self.freqs[start_bin:end_bin]
-            pos_I = self.I_fft[start_bin:end_bin]
-            pos_Q = self.Q_fft[start_bin:end_bin]
-
+            pos_fft = self.fft[start_bin:end_bin]
+            
             # Bins = FFT signal divided into bins
             # Bin_frequencies = Frequency array divided into bins
-            bins,bin_frequencies = channel_selector((pos_I + pos_Q),pos_freqs,no_channels)
-
-            # import matplotlib.pyplot as plt
-            # plt.figure()
-            # for i in range(bins.shape[0]):
-            #     plt.plot(bin_frequencies[i],np.abs(bins[i]))
-            # plt.axvline(bin_frequencies[2][int(bins[2].argmax())],color='red')
-
+            bins,bin_frequencies = channel_selector(pos_fft,pos_freqs,no_channels)
             fpeak_list = []
-            delta_flist = []
             for i in range(bins.shape[0]):
                 bin_fpeak_pos = int(bins[i].argmax())
                 fpeak_list.append(bin_frequencies[i][bin_fpeak_pos])
-                if self.mixing:
-                    delta_f = bin_frequencies[i][bin_fpeak_pos] - (self.lut[i] - self.lo)
-                elif not(self.mixing):
-                    delta_f = bin_frequencies[i][bin_fpeak_pos] - self.lut[i]
-                delta_flist.append(np.abs(delta_f))
 
-            self.fpeak_list = fpeak_list
-            self.delta_flist = delta_flist
-            self.frequency_isolation()
+            singlespike_signals = self.frequency_isolation(fpeak_list)
+            ddc_bins = self.digital_down_conversion(singlespike_signals)
+            zero_hz_amplitudes = []
+            for row in range(ddc_bins.shape[0]):
+                zero_hz_amplitudes.append(np.abs(np.fft.fft(ddc_bins[row],n=self.N)[0]))
 
-            delta_signals = np.empty((0,len(self.time_array)),float)
-            for f in delta_flist:
-                delta_signal = np.sin(2*np.pi*f*self.time_array)
-                delta_signals = np.vstack([delta_signals,delta_signal])
+            print('Fine channelisation stage complete')
 
-            self.delta_signals = delta_signals
-            self.digital_down_conversion()
-
-    def frequency_isolation(self):
+    def frequency_isolation(self,fpeaks):
         bandpass_list = []
-        for f in self.fpeak_list:
-            bandpass_list.append((f - 0.25e6,f + 0.25e6))
+        for f in fpeaks:
+            bandpass_list.append((f - 0.25e6, f + 0.25e6))
 
         singlespike_signals = np.empty((0,len(self.signal_array)),float)
         for bp_range in bandpass_list:
             singlespike_signals = np.vstack([singlespike_signals,bpf(self.signal_array,bp_range,self.fs)])
 
-        self.singlespike_signals = singlespike_signals
+        return singlespike_signals
 
-    def digital_down_conversion(self):
-        ddc_signals_higher = np.empty((0,len(self.signal_array)),float)
-        ddc_signals_lower = np.empty((0,len(self.signal_array)),float)
+    def digital_down_conversion(self, singlespikes):
+        double_mixed = singlespikes*singlespikes
+        ddc_bins = np.empty((0, len(double_mixed[0])),float)
 
-        sigs = self.singlespike_signals.shape[0]
-        deltas = self.delta_signals.shape[0]
+        for sig in range(double_mixed.shape[0]):
+            ddc_bins = np.vstack([ddc_bins,lpf(double_mixed[sig],0.25e6,self.fs)])
+        return ddc_bins
 
-        for sig,delta in zip(range(sigs),range(deltas)):
+    def phase_conversion(self):
+       bin_phase_shifts = []
+       for I,Q in zip(self.IQ_zero_hz_amplitudes['I'], self.IQ_zero_hz_amplitudes['Q']):
+           bin_phase_shifts.append(np.arctan(Q/I))
 
-            mixed_sig = self.singlespike_signals[sig]*self.delta_signals[delta]
-            low_sig = lpf(mixed_sig,(self.fpeak_list[sig] - self.delta_flist[delta]) + 0.25e6,fs=self.fs)
-            high_sig = hpf(mixed_sig,(self.fpeak_list[sig] + self.delta_flist[delta]) - 0.25e6,fs=self.fs)
+       self.bin_phase_shifts = bin_phase_shifts
 
-            ddc_signals_lower = np.vstack([ddc_signals_lower,low_sig])
-            ddc_signals_higher = np.vstack([ddc_signals_higher,high_sig])
 
 class FFTGeneric:
 
