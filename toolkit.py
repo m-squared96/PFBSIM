@@ -3,6 +3,9 @@
 import numpy as np
 from scipy.signal import get_window,firwin,iirfilter,sosfilt
 
+#TODO: Utilise negative frequencies post-mixing
+
+
 class FilterBank:
 
     def __init__(self,signal,time,PFBdict,Sigdict,DSPdict):
@@ -21,7 +24,6 @@ class FilterBank:
         self.window = PFBdict['window']
         # Sigdict parameters
         self.L = Sigdict['length']
-        self.lut = Sigdict['lut']
         self.complexity = Sigdict['complexity']
         self.bandwidth = Sigdict['bandwidth']
         self.fmax = Sigdict['fmax']
@@ -31,6 +33,7 @@ class FilterBank:
         self.mixing = DSPdict['mixing']
         self.lpf_cutoff = DSPdict['lpf']
         self.overlap = DSPdict['overlap']
+        self.ddc = DSPdict['ddc']
 
         # Data and variables derived from the above
 
@@ -87,8 +90,15 @@ class FilterBank:
         Accepts a signal and window function, each of length m*N, and
         divides both into m branches of length N.
         '''
-        x = np.reshape(x,(self.taps,self.L//self.taps))
-        w = np.reshape(self.window_coeffs,(self.taps,self.L//self.taps))
+        
+        rows = self.taps
+        columns = self.L//self.taps
+
+        if rows*columns != self.L:
+            columns += int((self.L%self.taps)/self.taps)
+
+        x = np.reshape(x,(rows,columns))
+        w = np.reshape(self.window_coeffs,(rows,columns))
         x_win = x*w
         return np.sum(x_win,axis=0)
 
@@ -107,29 +117,27 @@ class FilterBank:
         return np.array(fft)
 
     def fine_channelisation(self,no_channels):
-        if self.lut is None:
-            print('\nFine channelisation cannot occur due to issues with LUT.')
+        print('\nBeginning fine channelisation')
+        
+        if self.mixing:
+            start_freq = self.fmin - self.lo
+            start_bin = int(start_freq/self.bin_width)
 
-        elif self.lut is not None:
-            print('\nBeginning fine channelisation')
-            
-            if self.mixing:
-                start_freq = self.fmin - self.lo
-                start_bin = int(start_freq/self.bin_width)
+        elif not self.mixing:
+            start_freq = self.fmin
+            start_bin = int(start_freq/self.bin_width) - 1
 
-            elif not self.mixing:
-                start_freq = self.fmin
-                start_bin = int(start_freq/self.bin_width) - 1
+        end_freq = start_freq + self.bandwidth            
+        end_bin = int(end_freq/self.bin_width) + 3
 
-            end_freq = start_freq + self.bandwidth            
-            end_bin = int(end_freq/self.bin_width) + 3
-
-            pos_freqs = self.freqs[start_bin:end_bin]
-            pos_fft = self.fft[start_bin:end_bin]
-            
-            # Bins = FFT signal divided into bins
-            # Bin_frequencies = Frequency array divided into bins
-            bins,bin_frequencies = channel_selector(pos_fft,pos_freqs,no_channels)
+        pos_freqs = self.freqs[start_bin:end_bin]
+        pos_fft = self.fft[start_bin:end_bin]
+        
+        # Bins = FFT signal divided into bins
+        # Bin_frequencies = Frequency array divided into bins
+        bins,bin_frequencies = channel_selector(pos_fft,pos_freqs,no_channels)
+        
+        if self.ddc:
             fpeak_list = []
             for i in range(bins.shape[0]):
                 bin_fpeak_pos = int(bins[i].argmax())
@@ -141,7 +149,7 @@ class FilterBank:
             for row in range(ddc_bins.shape[0]):
                 zero_hz_amplitudes.append(np.abs(np.fft.fft(ddc_bins[row],n=self.N)[0]))
 
-            print('Fine channelisation stage complete')
+        print('Fine channelisation stage complete')
 
     def frequency_isolation(self,fpeaks):
         bandpass_list = []
@@ -225,7 +233,7 @@ class FFTGeneric:
         return np.array(fft)
 
 def dB(X):
-    return 10*np.log10(abs(X))
+    return 20*np.log10(abs(X))
 
 def iq_mixer(signal,lo,time_array,fs,lpf_cutoff):
     inphase = lpf(signal*np.cos(2*np.pi*lo*time_array),lpf_cutoff,fs)
