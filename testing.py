@@ -36,12 +36,10 @@ def fft_bin_response(time,signal,N):
     Overlap_fft = toolkit.FFTGeneric(signal,time,N,Sigconfig,DSPconfig_Overlap)
 
     plt.figure()
-    plt.plot((noOverlap_fft.freqs)*(noOverlap_fft.N/noOverlap_fft.fs),toolkit.dB(np.abs(noOverlap_fft.fft)),label='No Overlap')
-    plt.plot((Overlap_fft.freqs)*(Overlap_fft.N*2/Overlap_fft.fs),toolkit.dB(np.abs(Overlap_fft.fft)),label='Overlap')
+    plt.plot(noOverlap_fft.freqs,toolkit.dB(np.abs(noOverlap_fft.fft/max(noOverlap_fft.fft))),label='No Overlap')
     plt.title('FFT Bin Response')
-    plt.legend()
-    plt.xlabel('Frequency Bin')
-    plt.ylabel('Signal Strength (dB)')
+    plt.xlabel(r'Frequency (Hz)')
+    plt.ylabel('Signal Response (dB)')
 
 def pfb_bin_response(time,signal,N):
 
@@ -79,12 +77,10 @@ def pfb_bin_response(time,signal,N):
     Overlap_PFB = toolkit.FilterBank(signal,time,PFBconfig,Sigconfig,DSPconfig_Overlap)
 
     plt.figure()
-    plt.plot((noOverlap_PFB.freqs)*(noOverlap_PFB.N/noOverlap_PFB.fs),toolkit.dB(np.abs(noOverlap_PFB.fft)),label='No Overlap')
-    plt.plot((Overlap_PFB.freqs)*(Overlap_PFB.N*2/Overlap_PFB.fs),toolkit.dB(np.abs(Overlap_PFB.fft)),label='Overlap')
+    plt.plot(noOverlap_PFB.freqs,toolkit.dB(np.abs(noOverlap_PFB.fft)/(len(signal)/2)),label='No Overlap')
     plt.title('PFB Bin Response')
-    plt.legend()
-    plt.xlabel('Frequency Bin')
-    plt.ylabel('Signal Strength (dB)')
+    plt.xlabel(r'Frequency (Hz)')
+    plt.ylabel('Signal Response (dB)')
 
 def pfb_response_across_windows(time,signal,N,windows,plot_title):
 
@@ -114,12 +110,12 @@ def pfb_response_across_windows(time,signal,N,windows,plot_title):
     for w in windows:
         PFBconfig['window'] = w
         pfbmodel = toolkit.FilterBank(signal,time,PFBconfig,Sigconfig,DSPconfig)
-        plt.plot((pfbmodel.freqs)*(pfbmodel.N*2/pfbmodel.fs),toolkit.dB(np.abs(pfbmodel.fft)),label=w.capitalize())
+        plt.plot(pfbmodel.freqs,toolkit.dB(np.abs(pfbmodel.fft)/(len(signal)/2)),label=w.capitalize())
 
     plt.title(plot_title)
     plt.legend()
-    plt.xlabel('Frequency Bin')
-    plt.ylabel('Signal Strength (dB)')
+    plt.xlabel(r'Frequency (Hz)')
+    plt.ylabel('Signal Response (dB)')
 
 def signal_spike_attenuation(time,signal_frequencies,N,windows,noise,overlap=False):
 
@@ -189,28 +185,28 @@ def main():
     Npoint = 4096
     time = np.linspace(0,0.1,4096)
     
-    #tophat = pulse(1000,Npoint)
-    #delta = pulse(1,Npoint)
+    tophat = pulse(10,Npoint)
+    delta = pulse(1,Npoint)
     #dc = pulse(Npoint*100,Npoint*100)
     #chirp_sig = chirp(time,0,time[-1],100,method='linear')
 
-    #fft_bin_response(time,tophat,Npoint)
-    #pfb_bin_response(time,tophat,Npoint)
+    fft_bin_response(time,tophat,Npoint)
+    pfb_bin_response(time,tophat,Npoint)
 
     test_windows = ('hamming','hann','blackman','boxcar')
     #pfb_response_across_windows(time,tophat,Npoint,test_windows,'Tophat Frequency Response')
     #pfb_response_across_windows(time,dc,Npoint,test_windows,'DC Frequency Response')
     #pfb_response_across_windows(time,chirp_sig,Npoint,test_windows,'Chirp Frequency Response')
 
-    fs_attenuation = 1e9
-    time_attenuation = np.arange(0,0.01,1/fs_attenuation)
-    bw_multiples = np.array([100,121.125,142.25,163.375,184.50,205.625,226.75,247.875,269],float)
-    N_attenuation = (1024,2048,4096)
+    #fs_attenuation = 1e9
+    #time_attenuation = np.arange(0,0.01,1/fs_attenuation)
+    #bw_multiples = np.array([100,121.125,142.25,163.375,184.50,205.625,226.75,247.875,269],float)
+    #N_attenuation = (1024,2048,4096)
     
-    for N in N_attenuation:
-        for ov_status in (True,False):
-            attenuation_bin_width = fs_attenuation/N
-            signal_spike_attenuation(time_attenuation,bw_multiples*attenuation_bin_width,N,test_windows,0,ov_status)
-
+#    for N in N_attenuation:
+#        for ov_status in (True,False):
+#            attenuation_bin_width = fs_attenuation/N
+#            signal_spike_attenuation(time_attenuation,bw_multiples*attenuation_bin_width,N,test_windows,0,ov_status)
+#
 main()
 plt.show()
