@@ -53,8 +53,9 @@ def pfb_bin_response(time,signal,N):
         'length':4096,
         'complexity':1,
         'bandwidth':10,
-        'fmax':1,
-        'fmin':0
+        'fmax':2000,
+        'fmin':0,
+        'lut':np.array([0],float)
     }
 
     DSPconfig_noOverlap = {
@@ -74,13 +75,13 @@ def pfb_bin_response(time,signal,N):
     }
     
     noOverlap_PFB = toolkit.FilterBank(signal,time,PFBconfig,Sigconfig,DSPconfig_noOverlap)
-    Overlap_PFB = toolkit.FilterBank(signal,time,PFBconfig,Sigconfig,DSPconfig_Overlap)
+    #Overlap_PFB = toolkit.FilterBank(signal,time,PFBconfig,Sigconfig,DSPconfig_Overlap)
 
-    plt.figure()
-    plt.plot(noOverlap_PFB.freqs,toolkit.dB(np.abs(noOverlap_PFB.fft)/(len(signal)/2)),label='No Overlap')
-    plt.title('PFB Bin Response')
-    plt.xlabel(r'Frequency (Hz)')
-    plt.ylabel('Signal Response (dB)')
+    #plt.figure()
+    #plt.plot(noOverlap_PFB.freqs,toolkit.dB(np.abs(noOverlap_PFB.fft)/(len(signal)/2)),label='No Overlap')
+    #plt.title('PFB Bin Response')
+    #plt.xlabel(r'Frequency (Hz)')
+    #plt.ylabel('Signal Response (dB)')
 
 def pfb_response_across_windows(time,signal,N,windows,plot_title):
 
@@ -190,7 +191,7 @@ def main():
     #dc = pulse(Npoint*100,Npoint*100)
     #chirp_sig = chirp(time,0,time[-1],100,method='linear')
 
-    fft_bin_response(time,tophat,Npoint)
+    #fft_bin_response(time,tophat,Npoint)
     pfb_bin_response(time,tophat,Npoint)
 
     test_windows = ('hamming','hann','blackman','boxcar')

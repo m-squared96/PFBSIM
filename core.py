@@ -113,7 +113,7 @@ def fft_handler(signal,N,Sigdict,DSPdict):
 def main():
 
     N = 4096 # Point spec for the FFT
-    mixing = True
+    mixing = False
     mixing_lo = 2.0e9 # Local oscillator frequency for the IQ mixer
     lpf_cutoff = 2.1e9 # -3dB point of Butterworth IIR LPF
     taps = 4 # PFB taps
