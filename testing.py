@@ -6,7 +6,7 @@ import glob
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from scipy.signal import chirp
+import scipy.signal
 
 import toolkit
 
@@ -35,87 +35,118 @@ def fft_bin_response(time,signal,N):
     noOverlap_fft = toolkit.FFTGeneric(signal,time,N,Sigconfig,DSPconfig_noOverlap)
     Overlap_fft = toolkit.FFTGeneric(signal,time,N,Sigconfig,DSPconfig_Overlap)
 
+    binsOV = [x for x in range(-N,N,1)]
+    binsOV = binsOV[N:] + binsOV[:N]
+
+    binsnOV = [x for x in range(-N//2,N//2,1)]
+    binsnOV = binsnOV[N//2:] + binsnOV[:N//2]
+
     plt.figure()
-    plt.plot(noOverlap_fft.freqs,toolkit.dB(np.abs(noOverlap_fft.fft/max(noOverlap_fft.fft))),label='No Overlap')
+    plt.plot(binsnOV,toolkit.dB(np.abs(noOverlap_fft.fft/max(noOverlap_fft.fft))),label='No Overlap',c='b',ls='--')
+    plt.plot(binsOV,toolkit.dB(np.abs(Overlap_fft.fft/max(Overlap_fft.fft))),label='Overlap',c='r')
+    plt.legend()
     plt.title('FFT Bin Response')
-    plt.xlabel(r'Frequency (Hz)')
+    plt.xlabel(r'Bin Offset')
     plt.ylabel('Signal Response (dB)')
 
-def pfb_bin_response(time,signal,N):
-
-    PFBconfig = {
-        'N':N,
-        'taps':4,
-        'window':'hamming'
-    }
+def pfb_bin_response(time,window,N,plot_title):
+    
+    length = 51
+    taps = 4
 
     Sigconfig = {
-        'length':4096,
+        'length':length,
         'complexity':1,
         'bandwidth':10,
         'fmax':2000,
-        'fmin':0,
-        'lut':np.array([0],float)
+        'fmin':0
     }
-
-    DSPconfig_noOverlap = {
+    
+    DSPconfig = {
         'lo':0,
         'mixing':False,
         'lpf':0,
-        'overlap':False,
-        'ddc':False
+        'ddc':True
     }
-    
-    DSPconfig_Overlap = {
-        'lo':0,
-        'mixing':False,
-        'lpf':0,
-        'overlap':True,
-        'ddc':False
-    }
-    
-    noOverlap_PFB = toolkit.FilterBank(signal,time,PFBconfig,Sigconfig,DSPconfig_noOverlap)
-    #Overlap_PFB = toolkit.FilterBank(signal,time,PFBconfig,Sigconfig,DSPconfig_Overlap)
 
-    #plt.figure()
-    #plt.plot(noOverlap_PFB.freqs,toolkit.dB(np.abs(noOverlap_PFB.fft)/(len(signal)/2)),label='No Overlap')
-    #plt.title('PFB Bin Response')
-    #plt.xlabel(r'Frequency (Hz)')
-    #plt.ylabel('Signal Response (dB)')
+    sinc = scipy.signal.firwin(length,taps/length,window='rectangular')
+    win = scipy.signal.get_window(window,length)
+    signal = sinc*win
+
+    plt.figure()
+    for ov_status,col,style in zip((False,True),('b','r'),('--','-')):
+        DSPconfig['overlap'] = ov_status
+            
+        readout = toolkit.FFTGeneric(win,time,N,Sigconfig,DSPconfig)
+        response = toolkit.dB(np.abs(readout.fft/max(np.abs(readout.fft))))
+
+        if not readout.overlap:
+            bins = [x for x in range(-N//2,N//2,1)]
+            #bins = bins[N//2:] + bins[:N//2]
+            response = np.concatenate((response[N//2:],response[:N//2]))
+            label_str = 'No Overlap'
+
+        else:
+            bins = [x for x in range(-N,N,1)]
+            #bins = bins[N:] + bins[:N]
+            response = np.concatenate((response[N:],response[:N]))
+            label_str = 'Overlap'
+
+        plt.plot(bins,response,label=label_str,c=col,ls=style)
+
+    plt.legend()
+    plt.title(plot_title)
+    plt.xlabel('Bin Offset')
+    plt.ylabel('Signal Response (dB)')
 
 def pfb_response_across_windows(time,signal,N,windows,plot_title):
-
-    PFBconfig = {
-        'N':N,
-        'taps':4
-    }
+    
+    length = 51
+    taps = 4
 
     Sigconfig = {
         'length':len(signal),
         'complexity':1,
         'bandwidth':10,
         'fmax':1,
-        'fmin':0
+        'fmin':0,
     }
 
     DSPconfig = {
         'lo':0,
         'mixing':False,
         'lpf':0,
-        'overlap':False,
+        'overlap':True,
         'ddc':False
     }
-
+   
+    sinc = scipy.signal.firwin(length,taps/length,window='rectangular')
     plt.figure()
+    for w,col in zip(windows,('b','r','black')):
+        win = scipy.signal.get_window(w,length)
+        if w != 'boxcar':
+            win *= sinc
+            label_str = w.capitalize() + '-Based PFB'
+        elif w == 'boxcar':
+            label_str = 'Raw FFT'
+        readout = toolkit.FFTGeneric(win,time,N,Sigconfig,DSPconfig)
+        response = toolkit.dB(np.abs(readout.fft/max(np.abs(readout.fft))))
 
-    for w in windows:
-        PFBconfig['window'] = w
-        pfbmodel = toolkit.FilterBank(signal,time,PFBconfig,Sigconfig,DSPconfig)
-        plt.plot(pfbmodel.freqs,toolkit.dB(np.abs(pfbmodel.fft)/(len(signal)/2)),label=w.capitalize())
+        if not readout.overlap:
+            bins = [x for x in range(-N//2,N//2,1)]
+            #bins = bins[N//2:] + bins[:N//2]
+            response = np.concatenate((response[N//2:],response[:N//2]))
 
-    plt.title(plot_title)
+        else:
+            bins = [x for x in range(-N,N,1)]
+            #bins = bins[N:] + bins[:N]
+            response = np.concatenate((response[N:],response[:N]))
+
+        plt.plot(bins,response,label=label_str,c=col)
+
     plt.legend()
-    plt.xlabel(r'Frequency (Hz)')
+    plt.title(plot_title)
+    plt.xlabel('Bin Offset')
     plt.ylabel('Signal Response (dB)')
 
 def signal_spike_attenuation(time,signal_frequencies,N,windows,noise,overlap=False):
@@ -139,7 +170,8 @@ def signal_spike_attenuation(time,signal_frequencies,N,windows,noise,overlap=Fal
         'complexity':1,
         'bandwidth':10,
         'fmax':1,
-        'fmin':0
+        'fmin':0,
+        'lut':None
     }
 
     DSPconfig = {
@@ -188,26 +220,22 @@ def main():
     
     tophat = pulse(10,Npoint)
     delta = pulse(1,Npoint)
-    #dc = pulse(Npoint*100,Npoint*100)
-    #chirp_sig = chirp(time,0,time[-1],100,method='linear')
 
-    #fft_bin_response(time,tophat,Npoint)
-    pfb_bin_response(time,tophat,Npoint)
+    fft_bin_response(time,tophat,Npoint)
+    pfb_bin_response(time,'hamming',Npoint,'Hamming-based PFB Bin Response')
 
-    test_windows = ('hamming','hann','blackman','boxcar')
-    #pfb_response_across_windows(time,tophat,Npoint,test_windows,'Tophat Frequency Response')
-    #pfb_response_across_windows(time,dc,Npoint,test_windows,'DC Frequency Response')
-    #pfb_response_across_windows(time,chirp_sig,Npoint,test_windows,'Chirp Frequency Response')
+    test_windows = ('boxcar','hamming','blackmanharris')
+    pfb_response_across_windows(time,tophat,Npoint,test_windows,'Effect of Window Function on Bin Response')
 
     #fs_attenuation = 1e9
     #time_attenuation = np.arange(0,0.01,1/fs_attenuation)
     #bw_multiples = np.array([100,121.125,142.25,163.375,184.50,205.625,226.75,247.875,269],float)
     #N_attenuation = (1024,2048,4096)
-    
-#    for N in N_attenuation:
-#        for ov_status in (True,False):
-#            attenuation_bin_width = fs_attenuation/N
-#            signal_spike_attenuation(time_attenuation,bw_multiples*attenuation_bin_width,N,test_windows,0,ov_status)
-#
+    #
+    #for N in N_attenuation:
+    #    for ov_status in (True,False):
+    #        attenuation_bin_width = fs_attenuation/N
+    #        signal_spike_attenuation(time_attenuation,bw_multiples*attenuation_bin_width,N,test_windows,0,ov_status)
+
 main()
 plt.show()
