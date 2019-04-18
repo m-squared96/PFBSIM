@@ -36,14 +36,20 @@ def fft_bin_response(time,signal,N):
     Overlap_fft = toolkit.FFTGeneric(signal,time,N,Sigconfig,DSPconfig_Overlap)
 
     binsOV = [x for x in range(-N,N,1)]
-    binsOV = binsOV[N:] + binsOV[:N]
+    #binsOV = binsOV[N:] + binsOV[:N]
 
     binsnOV = [x for x in range(-N//2,N//2,1)]
-    binsnOV = binsnOV[N//2:] + binsnOV[:N//2]
+    #binsnOV = binsnOV[N//2:] + binsnOV[:N//2]
+    
+    responseOV = toolkit.dB(np.abs(Overlap_fft.fft/max(noOverlap_fft.fft)))
+    responseOV = np.concatenate((responseOV[N:],responseOV[:N]))
+
+    responsenOV = toolkit.dB(np.abs(noOverlap_fft.fft/max(Overlap_fft.fft)))
+    responsenOV = np.concatenate((responsenOV[N//2:],responsenOV[:N//2]))
 
     plt.figure()
-    plt.plot(binsnOV,toolkit.dB(np.abs(noOverlap_fft.fft/max(noOverlap_fft.fft))),label='No Overlap',c='b',ls='--')
-    plt.plot(binsOV,toolkit.dB(np.abs(Overlap_fft.fft/max(Overlap_fft.fft))),label='Overlap',c='r')
+    plt.plot(binsnOV,responsenOV,label='No Overlap',c='b',ls='--')
+    plt.plot(binsOV,responseOV,label='Overlap',c='r')
     plt.legend()
     plt.title('FFT Bin Response')
     plt.xlabel(r'Bin Offset')
@@ -218,7 +224,7 @@ def main():
     Npoint = 4096
     time = np.linspace(0,0.1,4096)
     
-    tophat = pulse(10,Npoint)
+    tophat = pulse(51,Npoint)
     delta = pulse(1,Npoint)
 
     fft_bin_response(time,tophat,Npoint)

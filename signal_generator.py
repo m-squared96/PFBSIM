@@ -45,7 +45,12 @@ def wave_gen(signal,time_array,complexity,sampling_frequency):
 def mkid_gen(signal,time_array,complexity,sampling_frequency,perturbation,fmin,fmax):
     min_freq = fmin
     max_freq = fmax
-    freq_spacing = (max_freq-min_freq)/(complexity-1)
+
+    if complexity > 1:
+        freq_spacing = (max_freq-min_freq)/(complexity-1)
+
+    elif complexity == 1:
+        freq_spacing = max_freq - min_freq
 
     if freq_spacing < 2e6:
         raise ValueError("Too many resonators: adjust bandwidth to accomodate")
@@ -75,14 +80,32 @@ def mkid_gen(signal,time_array,complexity,sampling_frequency,perturbation,fmin,f
                 res_count += 1
                 res_freq += freq_spacing
 
-        filename = 'mkid_' + str(complexity) + '_' + str(min_freq/1e9) + '_' + str(max_freq/1e9)
+        if complexity/100 < 1:
+            if complexity/10 < 1:
+                complexity_str = '00' + str(complexity)
+            elif complexity/10 >= 1:
+                complexity_str = '0' + str(complexity)
+
+        elif complexity/100 >= 1:
+            complexity_str = str(complexity)
+
+        filename = 'mkid_' + complexity_str + '_' + str(min_freq/1e9) + '_' + str(max_freq/1e9)
         if perturbation:
             filename += '_P'
     
     return signal,filename
 
 def lut_gen(fmin,fmax,spacing,res_count):
-    lut_filename = "LUTs/LUT_" + str(res_count) + "_" + str(fmin/1e9) + "_" + str(fmax/1e9) + ".npy"
+    if res_count/100 < 1:
+        if res_count/10 < 1:
+            res_str = '00' + str(res_count)
+        elif res_count/10 >= 1:
+            res_str = '0' + str(res_count)
+
+    elif res_count/100 >= 1:
+        res_str = str(res_count)
+
+    lut_filename = "LUTs/LUT_" + res_str + "_" + str(fmin/1e9) + "_" + str(fmax/1e9) + ".npy"
     if not(os.path.isfile(lut_filename)):
         print("\nGenerating LUT file:")
         print("Min. Frequency: " + str(fmin/1e9) + "GHz")
@@ -127,24 +150,17 @@ def directory_check():
         print("Creating LUTs/ subdirectory")
         os.system("mkdir LUTs")
 
-if __name__ == '__main__':
-
+def handler(length,complexity,noise_strength,method):
     directory_check()
 
-    Npoint = 4096
-    multiple = 1000
-    complexity = 20 # Number of signals/resonators
-    noise_strength = 0.5
-
     # Define min and max resonator frequencies for use in MKID file generation
-    min_freq = 2.0e9
-    max_freq = 4.0e9
+    min_freq = 1.0e9
+    max_freq = 5.0e9
 
-    fs = 1e10 # Sampling frequency
-    time_length = (Npoint*multiple)/fs
+    fs = 11e9 # Sampling frequency
+    time_length = (length)/fs
     time = np.arange(0,time_length,1/fs)
 
-    method = input('Enter signal type (wave/mkid):  ')
     print('Generating files of type', method)
 
     if method == 'mkid':
@@ -163,8 +179,23 @@ if __name__ == '__main__':
 
             frame.to_csv('Data/' + name + '.csv', index=False)
 
-        print("\nComplete.")
-
     elif method =='wave':
 
         print("Wave file generation under development")
+
+def main():
+
+    length = 5e6
+    #complexity = tuple([1,2] + [i for i in range(501) if i%5 == 0 and i != 0])
+    complexity = [1,2,5,20,100,200,500,1000,1500,2000]
+    noise_vals = (0.0,0.5,0.99)
+    method = 'mkid'
+
+    for c in complexity:
+        for n in noise_vals:
+            handler(length,c,n,method)
+
+    print("\nComplete.")
+
+if __name__ == '__main__':
+    main()

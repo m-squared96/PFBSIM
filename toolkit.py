@@ -4,7 +4,6 @@ import numpy as np
 from scipy.signal import get_window,firwin,iirfilter,sosfilt,convolve
 import matplotlib.pyplot as plt
 
-#TODO: Utilise negative frequencies post-mixing
 
 class FilterBank:
 
@@ -29,7 +28,6 @@ class FilterBank:
         self.fmax = Sigdict['fmax']
         self.fmin = Sigdict['fmin']
         self.lut = Sigdict['lut']
-        print(self.lut.shape)
         # DSPdict parameters
         self.lo = DSPdict['lo']
         self.mixing = DSPdict['mixing']
@@ -65,38 +63,33 @@ class FilterBank:
 
         else:
             self.bin_width = self.fs/self.N
+            self.fft = self.I_fft
             self.freqs = np.fft.fftfreq(n=self.N)*self.fs
 
         self.isolate_spikes(self.complexity)
         
         print("Coarse channelisation complete")
         
-        if self.lut is not None:
+        if self.lut is not None and self.ddc == True:
             print('\nBeginning fine channelisation')
             self.lut_signals()
-            self.I_ddc_bins = self.fine_channelisation(self.I_bins,self.I_bin_frequencies)
-            self.Q_ddc_bins = self.fine_channelisation(self.Q_bins,self.Q_bin_frequencies)
-            plt.figure()
+            self.ddc_bins = self.fine_channelisation(self.bins,self.bin_frequencies)
             if self.complexity > 1:
-                for row in range(self.I_ddc_bins.shape[0]):
-                    Ntemp = len(self.I_bin_frequencies[row])
-                    fft_temp = np.fft.fft(self.I_ddc_bins[row],n=Ntemp)
+                for row in range(self.ddc_bins.shape[0]):
+                    Ntemp = len(self.bin_frequencies[row])
+                    fft_temp = np.fft.fft(self.ddc_bins[row],n=Ntemp)
                     fft_temp = np.concatenate((fft_temp[Ntemp//2:],fft_temp[:Ntemp//2]))
-                    response = dB(np.abs(fft_temp))
-                    print(response.shape)
-                    plt.plot(self.I_bin_frequencies[row],response)
+                    self.ddc_bins[row] = fft_temp
 
             elif self.complexity == 1:
                 Ntemp = self.N
-                fft_temp = np.fft.fft(self.I_ddc_bins,n=Ntemp)
+                fft_temp = np.fft.fft(self.ddc_bins,n=Ntemp)
                 fft_temp = np.concatenate((fft_temp[Ntemp//2:],fft_temp[:Ntemp//2]))
-                response = dB(np.abs(fft_temp))
-                print(response.shape)
-                plt.plot(self.freqs,response)
+                self.ddc_bins = fft_temp
 
             print('Fine channelisation complete')
 
-        elif self.lut is None:
+        elif self.lut is None or self.ddc == False:
             print('Fine channelisation stage cannot occur')
 
     def window_function(self):
@@ -147,18 +140,18 @@ class FilterBank:
         #end_bin += (end_bin - start_bin)%no_channels
 
         pos_freqs = self.freqs[start_bin:end_bin]
-        pos_I_fft = self.I_fft[start_bin:end_bin]
-        pos_Q_fft = self.Q_fft[start_bin:end_bin]
+        pos_fft = self.fft[start_bin:end_bin]
+
+        print(pos_freqs.shape)
+        print(pos_fft.shape)
             
         if self.complexity > 1:
             # Bins = FFT signal divided into bins
             # Bin_frequencies = Frequency array divided into bins
-            self.I_bins,self.I_bin_frequencies = channel_selector(pos_I_fft,pos_freqs,no_channels)
-            self.Q_bins,self.Q_bin_frequencies = channel_selector(pos_Q_fft,pos_freqs,no_channels)
+            self.bins,self.bin_frequencies = channel_selector(pos_fft,pos_freqs,no_channels)
 
         elif self.complexity == 1:
-            self.I_bins,self.I_bin_frequencies = pos_I_fft,pos_freqs
-            self.Q_bins,self.Q_bin_frequencies = pos_Q_fft,pos_freqs
+            self.bins,self.bin_frequencies = pos_fft,pos_freqs
 
     def fft_overlap(self):
         fft = []
@@ -187,40 +180,6 @@ class FilterBank:
             ddc_bins = bins
 
         return ddc_bins
-
-    def frequency_isolation(self,fpeaks):
-        bandpass_list = []
-        for f in fpeaks:
-            if f > 0.25e6:
-                bandpass_list.append((f - 0.25e6, f + 0.25e6))
-            elif f <= 0.25e6:
-                bandpass_list.append((0.1, f + 0.25e6))
-
-        singlespike_signals = np.empty((0,len(self.signal_array)),float)
-        for bp_range in bandpass_list:
-            singlespike_signals = np.vstack([singlespike_signals,bpf(self.signal_array,bp_range,self.fs)])
-
-        return singlespike_signals
-
-    def digital_down_conversion(self,singlespikes):
-        #double_mixed = convolve(singlespikes,self.ddc_lut_signals)
-        ddc_bins = np.empty((0, self.N),float)
-
-        for sig in range(singlespikes.shape[0]):
-            sig_downsampled = []
-            for element in range(double_mixed[sig].shape[0]):
-                if (element + 1)%2 == 0:
-                    sig_downsampled.append(double_mixed[sig][element])
-            sig_downsampled = np.array(sig_downsampled,float)
-            ddc_bins = np.vstack([ddc_bins,lpf(sig_downsampled,0.25e6,self.fs)])
-        return ddc_bins
-
-    def phase_conversion(self):
-       bin_phase_shifts = []
-       for I,Q in zip(self.IQ_zero_hz_amplitudes['I'], self.IQ_zero_hz_amplitudes['Q']):
-           bin_phase_shifts.append(np.arctan(Q/I))
-
-       self.bin_phase_shifts = bin_phase_shifts
 
 
 class FFTGeneric:

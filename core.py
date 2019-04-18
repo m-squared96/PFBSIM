@@ -90,12 +90,21 @@ def pfb_handler(signal,PFBdict,Sigdict,DSPdict):
     time_array = signal['Time']
 
     PFB = pfb.FilterBank(signal_array,time_array,PFBdict,Sigdict,DSPdict)
+    
+    if PFB.ddc == False:
+        plt.figure()
+        plt.plot(PFB.freqs/1e9,np.abs(PFB.fft/max(np.abs(PFB.fft))),c='b')
 
-    #plt.figure()
-    #plt.plot(PFB.freqs/1e9,pfb.dB(np.abs(PFB.fft)*1e6))
-    #plt.title('PFB Signal Frequency Composition')
-    #plt.xlabel('Frequency (GHz)')
-    #plt.ylabel('Signal Strength (a.u.)')
+    elif PFB.ddc == True and PFB.lut is not None:
+        plt.figure()
+        for row in range(PFB.ddc_bins.shape[0]):
+            plt.plot(PFB.bin_frequencies[row]/1e9,np.abs(PFB.ddc_bins[row]/(max(np.abs(PFB.ddc_bins[row])))),c='b')
+
+    plt.title('PFB Signal Decomposition')
+    plt.xlabel('Frequency (GHz)')
+    plt.ylabel('Signal Strength (a.u.)')
+    plt.xlim(left=0)
+    plt.ylim(0,1)
 
 def fft_handler(signal,N,Sigdict,DSPdict):
 
@@ -105,19 +114,90 @@ def fft_handler(signal,N,Sigdict,DSPdict):
     tool = pfb.FFTGeneric(signal_array,time_array,N,Sigdict,DSPdict)
 
     plt.figure()
-    plt.plot(tool.freqs,pfb.dB(np.abs(tool.fft)))
-    plt.title('FFT Signal Frequency Composition')
+    plt.plot(tool.freqs/1e9,np.abs(tool.fft/(max(np.abs(tool.fft)))),c='b')
+
+    plt.title('FFT Signal Decomposition')
     plt.xlabel('Frequency (GHz)')
     plt.ylabel('Signal Strength (a.u.)')
+    plt.xlim(left=0)
+    plt.ylim(0,1)
+
+def both_handler(signal,N,Sigdict,DSPdict,window,taps,filename,noise):
+
+    filename_components = tuple(filename.split('_'))
+    num_str = filename_components[1]
+    fmin_str = filename_components[2]
+    fmax_str = filename_components[3]
+
+    lut_filename = "LUTs/LUT_" + num_str + "_" + fmin_str + "_" + fmax_str + ".npy"
+
+    print("\nAttempting to load LUT file: " + lut_filename)
+
+    try:
+        lut = np.load(lut_filename)
+        print("Loaded LUT file successfully")
+
+    except FileNotFoundError:
+        lut = None
+        print("LUT file not loaded, fine channelisation cannot occur")
+
+    PFBdict = {
+        'N':N,
+        'taps':taps,
+        'window':window
+    }
+
+    Sigdict['lut'] = lut
+    Sigdict['complexity'] = int(num_str)
+    Sigdict['bandwidth'] = float(float(fmax_str) - float(fmin_str))*1e9
+    Sigdict['fmax'] = float(fmax_str)*1e9
+    Sigdict['fmin'] = float(fmin_str)*1e9
+    
+    signal_array = signal['Signal']
+    time_array = signal['Time']
+
+    signal_array += noise*np.random.random(len(signal_array))
+
+    FFT = pfb.FFTGeneric(signal_array,time_array,N,Sigdict,DSPdict)
+    PFB = pfb.FilterBank(signal_array,time_array,PFBdict,Sigdict,DSPdict)
+    
+    fig,axs = plt.subplots(1,2)
+    fig.suptitle('FFT and PFB Signal Decomposition')
+
+    axs[0].plot(FFT.freqs/1e9,np.abs(FFT.fft/max(np.abs(FFT.fft))),c='b')
+    axs[0].set_title('FFT Output')
+    axs[0].set_xlabel('Frequency (GHz)')
+    axs[0].set_ylabel('Signal Strength (a.u.)')
+
+    if FFT.mixing:
+        axs[0].set_xlim(-0.2,2.2)
+    else:
+        axs[0].set_xlim(1.8,4.2)
+
+    axs[1].set_title('PFB Output (' + window.capitalize() + ' Window)')
+    axs[1].set_xlabel('Frequency (GHz)')
+    axs[1].set_ylabel('Signal Strength (a.u.)')
+
+    if PFB.mixing:
+        axs[1].set_xlim(-0.2,2.2)
+    else:
+        axs[1].set_xlim(1.8,4.2)
+
+    if PFB.ddc == False:
+        axs[1].plot(PFB.freqs/1e9,np.abs(PFB.fft/max(np.abs(PFB.fft))),c='b')
+    elif PFB.ddc == True and PFB.lut is not None:
+        for row in range(PFB.ddc_bins.shape[0]):
+            axs[1].plot(PFB.bin_frequencies[row]/1e9,np.abs(PFB.ddc_bins[row]/(max(np.abs(PFB.ddc_bins[row])))),c='b')
 
 def main():
 
     N = 4096 # Point spec for the FFT
-    mixing = False
+    mixing = False 
     mixing_lo = 2.0e9 # Local oscillator frequency for the IQ mixer
     lpf_cutoff = 2.1e9 # -3dB point of Butterworth IIR LPF
     taps = 4 # PFB taps
-    window = 'hamming'
+    window = 'blackmanharris'
+    noise = 0
 
     signal, file_length, filename = readfile(N)
 
@@ -129,8 +209,8 @@ def main():
         'lo':mixing_lo,
         'mixing':mixing,
         'lpf':lpf_cutoff,
-        'overlap':False,
-        'ddc':False
+        'overlap':True,
+        'ddc':True
     }
 
     mode = input("Enter operational mode (pfb/fft/both):   ")
@@ -172,38 +252,7 @@ def main():
         fft_handler(signal,N,Sigdict,DSPdict)
 
     elif mode == 'both':
-        fft_handler(signal,N,Sigdict,DSPdict)
-
-        filename_components = tuple(filename.split('_'))
-        num_str = filename_components[1]
-        fmin_str = filename_components[2]
-        fmax_str = filename_components[3]
-
-        lut_filename = "LUTs/LUT_" + num_str + "_" + fmin_str + "_" + fmax_str + ".npy"
-
-        print("\nAttempting to load LUT file: " + lut_filename)
-
-        try:
-            lut = np.load(lut_filename)
-            print("Loaded LUT file successfully")
-
-        except FileNotFoundError:
-            lut = None
-            print("LUT file not loaded, fine channelisation cannot occur")
-
-        PFBdict = {
-            'N':N,
-            'taps':taps,
-            'window':window
-        }
-
-        Sigdict['lut'] = lut
-        Sigdict['complexity'] = int(num_str)
-        Sigdict['bandwidth'] = float(float(fmax_str) - float(fmin_str))*1e9
-        Sigdict['fmax'] = float(fmax_str)*1e9
-        Sigdict['fmin'] = float(fmin_str)*1e9
-
-        pfb_handler(signal,PFBdict,Sigdict,DSPdict)
+        both_handler(signal,N,Sigdict,DSPdict,window,taps,filename,noise)
 
 main()
 plt.show()
